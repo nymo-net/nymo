@@ -1,0 +1,64 @@
+syntax = "proto3";
+package pb;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/nymo-net/nymo";
+
+message PeerHandshake {
+  uint32 cohort = 1;
+  bytes pow = 2;
+  repeated bytes peerTokens = 3;
+}
+
+message HandshakeOK {
+  uint32 cohort = 1;
+  repeated bytes peerTokens = 2;
+}
+
+message MsgDigest {
+  uint32 cohort = 1;
+  bytes hash = 2;
+}
+
+message MsgList {
+  repeated MsgDigest messages = 1;
+}
+
+message RequestMsg {
+  bytes hash = 1;
+}
+
+message RequestPeer {
+  bytes token = 1;
+  bytes pow = 2;
+  uint32 cohort = 3;
+}
+
+message ResponsePeer {
+  bytes address = 1;
+}
+
+message RealMessage {
+  google.protobuf.Timestamp sendTime = 1;
+  string message = 2;
+  bytes senderID = 3; // sender's public key
+}
+
+message EncryptedMessage {
+  RealMessage msg = 1;
+  bytes msgSignature = 2; // signed with sender's private key
+}
+
+message Message {
+  uint32 targetCohort = 1;
+  google.protobuf.Timestamp generated = 2;
+  bytes encAesKey = 3; // receiver's public key encrypted AES ECB key
+  bytes encMessage = 4; // aesKey encrypted EncryptedMessage
+}
+
+message MessageContainer {
+  Message msg = 1;
+  bytes msgHash = 2;
+  bytes pow = 3;
+}
