@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/golang/protobuf v1.5.2
 	github.com/lucas-clemente/quic-go v0.24.0
+	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
 	google.golang.org/protobuf v1.26.0
 )
 
@@ -19,7 +20,6 @@ require (
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
 	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781 // indirect
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/tools v0.1.1 // indirect
