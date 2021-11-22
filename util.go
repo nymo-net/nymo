@@ -3,6 +3,7 @@ package nymo
 import (
 	"encoding/binary"
 	"io"
+	"net/http"
 	"unsafe"
 
 	"google.golang.org/protobuf/proto"
@@ -40,4 +41,14 @@ func recvMessage(conn io.Reader, m proto.Message) error {
 	}
 
 	return proto.Unmarshal(buf, m)
+}
+
+type writeFlusher struct {
+	w io.Writer
+	f http.Flusher
+}
+
+func (w *writeFlusher) Write(p []byte) (n int, err error) {
+	defer w.f.Flush()
+	return w.w.Write(p)
 }

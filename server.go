@@ -61,8 +61,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	peer, err := NewPeerAsServer(r.Body, w, handshake)
-	w.(http.Flusher).Flush()
+	peer, err := NewPeerAsServer(r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake)
 	if err != nil {
 		log.Println(err)
 		return
