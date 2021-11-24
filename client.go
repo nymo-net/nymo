@@ -2,7 +2,6 @@ package nymo
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -18,13 +17,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DialPeer(addr string) (*Peer, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
-	}
+func (u *user) DialPeer(addr string) (*peer, error) {
+	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 
 	var r http.RoundTripper
-	var setHandshake func(*x509.Certificate)
+	var material []byte
+	var setHandshake func()
 
 	switch {
 	case strings.HasPrefix(addr, "udp://"):
@@ -35,7 +33,12 @@ func DialPeer(addr string) (*Peer, error) {
 				if err != nil {
 					return nil, err
 				}
-				setHandshake(session.ConnectionState().TLS.PeerCertificates[0])
+				state := session.ConnectionState()
+				material, err = state.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
+				if err != nil {
+					return nil, err
+				}
+				setHandshake()
 				return session, err
 			},
 		}
@@ -47,7 +50,12 @@ func DialPeer(addr string) (*Peer, error) {
 				if err != nil {
 					return nil, err
 				}
-				setHandshake(client.ConnectionState().PeerCertificates[0])
+				state := client.ConnectionState()
+				material, err = state.ExportKeyingMaterial(nymoName, nil, blockSize)
+				if err != nil {
+					return nil, err
+				}
+				setHandshake()
 				return client, nil
 			},
 		}
@@ -63,10 +71,11 @@ func DialPeer(addr string) (*Peer, error) {
 	reader, writer := io.Pipe()
 	request.Body = reader
 
-	setHandshake = func(cert *x509.Certificate) {
+	setHandshake = func() {
 		handshake := pb.PeerHandshake{
-			Cohort:     0,
-			Pow:        calcPoW(cert.Raw),
+			Version:    nymoVersion,
+			Cohort:     u.cohort,
+			Pow:        calcPoW(material),
 			PeerTokens: nil, // TODO
 		}
 
@@ -86,5 +95,5 @@ func DialPeer(addr string) (*Peer, error) {
 		return nil, resp.Body.Close()
 	}
 
-	return NewPeerAsClient(resp.Body, writer)
+	return u.NewPeerAsClient(resp.Body, writer, material)
 }

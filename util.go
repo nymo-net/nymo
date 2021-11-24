@@ -1,6 +1,7 @@
 package nymo
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"net/http"
@@ -10,8 +11,6 @@ import (
 )
 
 const uint32Size = int(unsafe.Sizeof(uint32(0)))
-
-var encoding = binary.BigEndian
 
 func sendMessage(conn io.Writer, m proto.Message) error {
 	data, err := proto.Marshal(m)
@@ -51,4 +50,17 @@ type writeFlusher struct {
 func (w *writeFlusher) Write(p []byte) (n int, err error) {
 	defer w.f.Flush()
 	return w.w.Write(p)
+}
+
+func padBlock(input []byte) []byte {
+	pad := (len(input)/blockSize+1)*blockSize - len(input)
+	return append(input, bytes.Repeat([]byte{byte(pad)}, pad)...)
+}
+
+func trimBlock(input []byte) []byte {
+	b := int(input[len(input)-1])
+	if b <= 0 || b > blockSize {
+		return nil
+	}
+	return input[:len(input)-b]
 }

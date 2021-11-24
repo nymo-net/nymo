@@ -3,7 +3,6 @@ module github.com/nymo-net/nymo
 go 1.17
 
 require (
-	github.com/golang/protobuf v1.5.2
 	github.com/lucas-clemente/quic-go v0.24.0
 	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
 	google.golang.org/protobuf v1.26.0

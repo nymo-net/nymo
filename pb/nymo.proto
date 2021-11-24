@@ -1,14 +1,13 @@
 syntax = "proto3";
-package pb;
+package nymo;
 
-import "google/protobuf/timestamp.proto";
-
-option go_package = "github.com/nymo-net/nymo";
+option go_package = "github.com/nymo-net/nymo/pb";
 
 message PeerHandshake {
-  uint32 cohort = 1;
-  bytes pow = 2;
-  repeated bytes peerTokens = 3;
+  uint32 version = 1;
+  uint32 cohort = 2;
+  uint64 pow = 3;
+  repeated bytes peerTokens = 4;
 }
 
 message HandshakeOK {
@@ -31,34 +30,34 @@ message RequestMsg {
 
 message RequestPeer {
   bytes token = 1;
-  bytes pow = 2;
+  uint64 pow = 2;
   uint32 cohort = 3;
 }
 
 message ResponsePeer {
-  bytes address = 1;
+  bytes token = 1;
+  bytes encAddress = 2;
 }
 
 message RealMessage {
-  google.protobuf.Timestamp sendTime = 1;
-  string message = 2;
-  bytes senderID = 3; // sender's public key
+  string message = 1;
+  bytes senderID = 2; // sender's public key
 }
 
 message EncryptedMessage {
-  RealMessage msg = 1;
-  bytes msgSignature = 2; // signed with sender's private key
+  bytes msg = 1;
+  bytes signature = 2; // signed with sender's private key
 }
 
 message Message {
   uint32 targetCohort = 1;
-  google.protobuf.Timestamp generated = 2;
-  bytes encAesKey = 3; // receiver's public key encrypted AES ECB key
-  bytes encMessage = 4; // aesKey encrypted EncryptedMessage
+  int64 generated = 2;
+  bytes ephemeralPub = 3; // ephemeral public key
+  bytes encMessage = 4; // shared-key encrypted EncryptedMessage
 }
 
 message MessageContainer {
-  Message msg = 1;
+  bytes msg = 1;
   bytes msgHash = 2;
-  bytes pow = 3;
+  uint64 pow = 3;
 }

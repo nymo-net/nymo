@@ -2,10 +2,8 @@ package nymo
 
 import (
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -18,70 +16,71 @@ import (
 )
 
 type server struct {
+	user  *user
 	lock  sync.RWMutex
-	peers []*Peer
-	cert  []byte
+	peers []*peer
 }
 
-func (s *server) validate(r *http.Request) *pb.PeerHandshake {
+func (s *server) validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 	if r.Method != http.MethodPost {
-		return nil
+		return nil, nil
 	}
 	if r.URL.Path != "/" {
-		return nil
+		return nil, nil
 	}
 
 	auth := r.Header.Get("Authorization")
 	const prefix = "Basic "
 	if !strings.HasPrefix(auth, prefix) {
-		return nil
+		return nil, nil
 	}
 
 	c, err := base64.StdEncoding.DecodeString(auth[len(prefix):])
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
-	peer := new(pb.PeerHandshake)
-	err = proto.Unmarshal(c, peer)
+	p := new(pb.PeerHandshake)
+	err = proto.Unmarshal(c, p)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
-	if validatePoW(s.cert, peer.Pow) {
-		return peer
+	material, err := r.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
+	if err != nil {
+		return nil, nil
 	}
-	return nil
+
+	if validatePoW(material, p.Pow) {
+		return p, material
+	}
+	return nil, nil
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	handshake := s.validate(r)
+	handshake, sessionKey := s.validate(r)
 	if handshake == nil {
+		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	peer, err := NewPeerAsServer(r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake)
+	p, err := s.user.NewPeerAsServer(r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake, sessionKey)
 	if err != nil {
 		log.Println(err)
+		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
 
 	s.lock.Lock()
-	s.peers = append(s.peers, peer)
+	s.peers = append(s.peers, p)
 	s.lock.Unlock()
 
-	defer peer.reader.Close()
-	io.Copy(os.Stdout, peer.reader)
+	defer p.reader.Close()
+	io.Copy(os.Stdout, p.reader)
 }
 
-func RunServer(listenAddr, certFile, keyFile string) error {
-	certData, err := ioutil.ReadFile(certFile)
-	if err != nil {
-		return err
-	}
-	decode, _ := pem.Decode(certData)
-
+func (u *user) RunServer(listenAddr, certFile, keyFile string) error {
 	var serveFunc func(addr, certFile, keyFile string, handler http.Handler) error
 	switch {
 	case strings.HasPrefix(listenAddr, "udp://"):
@@ -91,5 +90,5 @@ func RunServer(listenAddr, certFile, keyFile string) error {
 	default:
 		return fmt.Errorf("%s: unknown address format", listenAddr)
 	}
-	return serveFunc(listenAddr[6:], certFile, keyFile, &server{cert: decode.Bytes})
+	return serveFunc(listenAddr[6:], certFile, keyFile, &server{user: u})
 }
