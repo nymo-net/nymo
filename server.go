@@ -3,12 +3,9 @@ package nymo
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
-	"sync"
 
 	"github.com/lucas-clemente/quic-go/http3"
 	"github.com/nymo-net/nymo/pb"
@@ -16,9 +13,7 @@ import (
 )
 
 type server struct {
-	user  *user
-	lock  sync.RWMutex
-	peers []*peer
+	user *user
 }
 
 func (s *server) validate(r *http.Request) (*pb.PeerHandshake, []byte) {
@@ -65,19 +60,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	p, err := s.user.NewPeerAsServer(r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake, sessionKey)
+	p, err := s.user.NewPeerAsServer(r.Context(), r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake, sessionKey)
 	if err != nil {
 		log.Println(err)
 		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
 
-	s.lock.Lock()
-	s.peers = append(s.peers, p)
-	s.lock.Unlock()
-
-	defer p.reader.Close()
-	io.Copy(os.Stdout, p.reader)
+	<-p.ctx.Done()
 }
 
 func (u *user) RunServer(listenAddr, certFile, keyFile string) error {

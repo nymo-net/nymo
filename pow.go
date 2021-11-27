@@ -3,6 +3,7 @@ package nymo
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"math/big"
 )
 
@@ -13,7 +14,7 @@ func calcPoW(data []byte) uint64 {
 
 	var counter uint64
 	var bInt big.Int
-	for counter < 0xFFFFFFFF {
+	for counter < math.MaxUint64 {
 		encoding.PutUint64(powData[dataLen:], counter)
 		hash := hasher(powData)
 		bInt.SetBytes(hash[:])

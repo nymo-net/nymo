@@ -9,11 +9,12 @@ import (
 
 const (
 	nymoName     = "nymo"
-	nymoVersion  = 1  // 0.1
+	nymoVersion  = 1  // v0.1
 	blockSize    = 32 // AES-256
 	cohortNumber = 64
 	bitStrength  = sha256.Size*8 - 20
 	protoPrefix  = nymoName + "://"
+	msgEpsilon   = 0.1 // 10% messages will be out-of-cohort
 )
 
 var (

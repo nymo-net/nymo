@@ -56,7 +56,7 @@ message Message {
   bytes encMessage = 4; // shared-key encrypted EncryptedMessage
 }
 
-message MessageContainer {
+message MsgContainer {
   bytes msg = 1;
   bytes msgHash = 2;
   uint64 pow = 3;

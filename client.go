@@ -95,5 +95,5 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 		return nil, resp.Body.Close()
 	}
 
-	return u.NewPeerAsClient(resp.Body, writer, material)
+	return u.NewPeerAsClient(request.Context(), resp.Body, writer, material)
 }

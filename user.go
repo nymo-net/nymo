@@ -2,13 +2,24 @@ package nymo
 
 import (
 	"crypto/ecdsa"
-	"crypto/x509"
-	"fmt"
+	"math/big"
+	"sync"
 )
 
 type user struct {
+	cfg    Config
+	db     Database
 	cohort uint32
 	key    *ecdsa.PrivateKey
+	peers  sync.Map
+}
+
+func (u *user) Close() error {
+	u.peers.Range(func(p, _ interface{}) bool {
+		p.(*peer).Close()
+		return true
+	})
+	return u.db.Close()
 }
 
 func (u *user) Address() *address {
@@ -19,25 +30,43 @@ func (u *user) Address() *address {
 	}
 }
 
-func (u *user) Export() ([]byte, error) {
-	return x509.MarshalECPrivateKey(u.key)
+func openUser(db Database, key *ecdsa.PrivateKey, cfg *Config) *user {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	return &user{
+		cfg:    *cfg,
+		db:     db,
+		cohort: getCohort(key.X, key.Y),
+		key:    key,
+	}
 }
 
-func ImportUser(der []byte) (*user, error) {
-	key, err := x509.ParseECPrivateKey(der)
+func OpenUser(db Database, cfg *Config) (*user, error) {
+	d, err := db.GetUserKey()
 	if err != nil {
 		return nil, err
 	}
-	if key.Curve != curve {
-		return nil, fmt.Errorf("pkey not using %s", curve.Params().Name)
-	}
-	return &user{cohort: getCohort(key.X, key.Y), key: key}, nil
+
+	key := new(ecdsa.PrivateKey)
+	key.Curve = curve
+	key.D = new(big.Int).SetBytes(d)
+	key.X, key.Y = curve.ScalarBaseMult(d)
+
+	return openUser(db, key, cfg), nil
 }
 
-func GenerateUser() (*user, error) {
+func GenerateUser(factory DatabaseFactory, cfg *Config) (*user, error) {
 	key, err := ecdsa.GenerateKey(curve, cReader)
 	if err != nil {
 		return nil, err
 	}
-	return &user{cohort: getCohort(key.X, key.Y), key: key}, nil
+
+	db, err := factory(key.D.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return openUser(db, key, cfg), nil
 }

@@ -5,11 +5,12 @@ import (
 )
 
 func TestSend(t *testing.T) {
-	u1, err := GenerateUser()
+	u1, err := GenerateUser(newMemDb, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	u2, err := GenerateUser()
+
+	u2, err := GenerateUser(newMemDb, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -30,17 +31,17 @@ func TestSend(t *testing.T) {
 	}
 }
 
-func TestExportImport(t *testing.T) {
-	u, err := GenerateUser()
+func TestReopen(t *testing.T) {
+	u, err := GenerateUser(newMemDb, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	b, err := u.Export()
+	err = u.Close()
 	if err != nil {
 		t.Error(err)
 	}
 
-	u2, err := ImportUser(b)
+	u2, err := OpenUser(u.db, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -48,4 +49,20 @@ func TestExportImport(t *testing.T) {
 	if u.cohort != u2.cohort || !u.key.Equal(u2.key) {
 		t.Error("user mismatch")
 	}
+}
+
+type memDb struct {
+	key []byte
+}
+
+func (m *memDb) GetUserKey() ([]byte, error) {
+	return m.key, nil
+}
+
+func (m *memDb) Close() error {
+	return nil
+}
+
+func newMemDb(userKey []byte) (Database, error) {
+	return &memDb{userKey}, nil
 }
