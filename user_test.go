@@ -36,10 +36,6 @@ func TestReopen(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	err = u.Close()
-	if err != nil {
-		t.Error(err)
-	}
 
 	u2, err := OpenUser(u.db, nil)
 	if err != nil {
@@ -52,6 +48,7 @@ func TestReopen(t *testing.T) {
 }
 
 type memDb struct {
+	NopDatabase
 	key []byte
 }
 
@@ -59,10 +56,6 @@ func (m *memDb) GetUserKey() ([]byte, error) {
 	return m.key, nil
 }
 
-func (m *memDb) Close() error {
-	return nil
-}
-
 func newMemDb(userKey []byte) (Database, error) {
-	return &memDb{userKey}, nil
+	return &memDb{key: userKey}, nil
 }

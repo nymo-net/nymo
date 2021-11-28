@@ -3,7 +3,6 @@ package nymo
 import (
 	"crypto/ecdsa"
 	"math/big"
-	"sync"
 )
 
 type user struct {
@@ -11,15 +10,6 @@ type user struct {
 	db     Database
 	cohort uint32
 	key    *ecdsa.PrivateKey
-	peers  sync.Map
-}
-
-func (u *user) Close() error {
-	u.peers.Range(func(p, _ interface{}) bool {
-		p.(*peer).Close()
-		return true
-	})
-	return u.db.Close()
 }
 
 func (u *user) Address() *address {

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -65,7 +64,7 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 
 	request, err := http.NewRequest(http.MethodPost, "https"+addr[3:], nil)
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
 	reader, writer := io.Pipe()

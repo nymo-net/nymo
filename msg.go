@@ -12,13 +12,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type message struct {
+type Message struct {
 	Sender   *address
 	SendTime time.Time
 	Content  string
 }
 
-func (u *user) DecryptMessage(msg *pb.Message) *message {
+func (u *user) DecryptMessage(msg *pb.Message) *Message {
 	if msg.TargetCohort != u.cohort {
 		return nil
 	}
@@ -62,7 +62,7 @@ func (u *user) DecryptMessage(msg *pb.Message) *message {
 		return nil
 	}
 
-	return &message{
+	return &Message{
 		Sender:   newAddress(x, y),
 		SendTime: time.UnixMilli(msg.Generated),
 		Content:  ret.Message,

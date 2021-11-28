@@ -14,7 +14,7 @@ const (
 	cohortNumber = 64
 	bitStrength  = sha256.Size*8 - 20
 	protoPrefix  = nymoName + "://"
-	msgEpsilon   = 0.1 // 10% messages will be out-of-cohort
+	epsilon  = 0.1 // 10% messages/peers will be out-of-cohort
 )
 
 var (

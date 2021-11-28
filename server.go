@@ -3,7 +3,6 @@ package nymo
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -62,7 +61,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	p, err := s.user.NewPeerAsServer(r.Context(), r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake, sessionKey)
 	if err != nil {
-		log.Println(err)
+		s.user.cfg.Logger.Println(err)
 		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}

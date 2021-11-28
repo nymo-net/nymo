@@ -31,12 +31,10 @@ message RequestMsg {
 message RequestPeer {
   bytes token = 1;
   uint64 pow = 2;
-  uint32 cohort = 3;
 }
 
 message ResponsePeer {
-  bytes token = 1;
-  bytes encAddress = 2;
+  string address = 1;
 }
 
 message RealMessage {
