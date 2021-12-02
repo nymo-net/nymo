@@ -5,12 +5,18 @@ import (
 	"encoding/binary"
 	"io"
 	"net/http"
+	"sync"
+	"time"
 	"unsafe"
 
 	"google.golang.org/protobuf/proto"
 )
 
 const uint32Size = int(unsafe.Sizeof(uint32(0)))
+
+func sameCohort(me, you uint32) bool {
+	return you == 0 || me == you
+}
 
 func sendMessage(conn io.Writer, m proto.Message) error {
 	data, err := proto.Marshal(m)
@@ -58,9 +64,58 @@ func padBlock(input []byte) []byte {
 }
 
 func trimBlock(input []byte) []byte {
-	b := int(input[len(input)-1])
+	c := input[len(input)-1]
+	b := int(c)
 	if b <= 0 || b > blockSize {
 		return nil
 	}
+	for i := len(input) - b; i < len(input)-1; i++ {
+		if input[i] != c {
+			return nil
+		}
+	}
 	return input[:len(input)-b]
+}
+
+func truncateHash(hash []byte) [hashTruncate]byte {
+	return *(*[hashTruncate]byte)(unsafe.Pointer(&hash[0]))
+}
+
+type peerRetrier struct {
+	l sync.Mutex
+	m map[string]time.Time
+}
+
+func (p *peerRetrier) addSelf(url string) {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	p.m[url] = emptyTime
+}
+
+func (p *peerRetrier) add(url string, timeout time.Duration) {
+	ddl := time.Now().Add(timeout)
+
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	t, ok := p.m[url]
+	if !ok || (t != emptyTime && t.Before(ddl)) {
+		p.m[url] = ddl
+	}
+}
+
+func (p *peerRetrier) noRetry(url string) bool {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	t, ok := p.m[url]
+	if !ok {
+		return false
+	}
+	if t == emptyTime || time.Until(t) > 0 {
+		return true
+	}
+	delete(p.m, url)
+	return false
 }

@@ -1,35 +1,29 @@
 syntax = "proto3";
 package nymo;
 
-option go_package = "github.com/nymo-net/nymo/pb";
+option go_package = "./pb";
 
 message PeerHandshake {
   uint32 version = 1;
   uint32 cohort = 2;
   uint64 pow = 3;
-  repeated bytes peerTokens = 4;
 }
 
 message HandshakeOK {
   uint32 cohort = 1;
-  repeated bytes peerTokens = 2;
 }
 
-message MsgDigest {
-  uint32 cohort = 1;
-  bytes hash = 2;
-}
-
-message MsgList {
-  repeated MsgDigest messages = 1;
-}
-
-message RequestMsg {
+message Digest {
   bytes hash = 1;
+  uint32 cohort = 2;
+}
+
+message PeerList {
+  repeated Digest peers = 1;
 }
 
 message RequestPeer {
-  bytes token = 1;
+  bytes urlHash = 1;
   uint64 pow = 2;
 }
 
@@ -37,9 +31,22 @@ message ResponsePeer {
   string address = 1;
 }
 
+message MsgList {
+  repeated Digest messages = 1;
+}
+
+message MsgKnown {
+  repeated bytes hashes = 1;
+}
+
+message RequestMsg {
+  bytes hash = 1;
+}
+
 message RealMessage {
   string message = 1;
   bytes senderID = 2; // sender's public key
+  int64 sendTime = 3;
 }
 
 message EncryptedMessage {
@@ -49,13 +56,11 @@ message EncryptedMessage {
 
 message Message {
   uint32 targetCohort = 1;
-  int64 generated = 2;
   bytes ephemeralPub = 3; // ephemeral public key
   bytes encMessage = 4; // shared-key encrypted EncryptedMessage
 }
 
 message MsgContainer {
   bytes msg = 1;
-  bytes msgHash = 2;
-  uint64 pow = 3;
+  uint64 pow = 2;
 }

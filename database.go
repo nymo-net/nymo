@@ -2,35 +2,32 @@ package nymo
 
 import "github.com/nymo-net/nymo/pb"
 
-type DatabaseFactory = func(userKey []byte) (Database, error)
-
-type Database interface {
-	GetUserKey() ([]byte, error)
-
-	AddPeer(url string, token []byte, cohort uint32, connected bool)
-	GetByToken(token []byte) (url string)
-	PeerDisconnected(url string, reason error)
-	GetStoredPeers(cohort uint32, size uint) (tokens [][]byte, err error)
-
-	StoreMessage(msg *pb.MsgContainer, cohort uint32)
-	StoreDecryptedMessage(*Message)
-	ListMessages(known [][]byte) ([]*pb.MsgDigest, error)
+type PeerHandle interface {
+	AddKnownMessages([]*pb.Digest) (need []*pb.Digest, ignored [][]byte)
+	AckKnownMessages([][]byte)
+	ListMessages(size uint) []*pb.Digest
+	AddKnownPeers([]*pb.Digest) []*pb.Digest
+	ListPeers(size uint) []*pb.Digest
+	Disconnect(error)
 }
 
-type NopDatabase struct{}
+type PeerEnumerate interface {
+	Url() string
+	Cohort() uint32
+	Next(error) bool
+	Connect(id []byte, cohort uint32) PeerHandle
+	Close()
+}
 
-func (NopDatabase) GetUserKey() ([]byte, error) { panic("implement me") }
+type Database interface {
+	MessageStat(cohort uint32) (in uint, out uint)
 
-func (NopDatabase) AddPeer(string, []byte, uint32, bool) {}
+	ClientHandle(id []byte) PeerHandle
+	AddPeer(url string, digest *pb.Digest)
+	EnumeratePeers() PeerEnumerate
+	GetUrlByHash(urlHash []byte) (url string)
 
-func (NopDatabase) GetByToken([]byte) (url string) { return "" }
-
-func (NopDatabase) PeerDisconnected(string, error) {}
-
-func (NopDatabase) GetStoredPeers(uint32, uint) ([][]byte, error) { return nil, nil }
-
-func (NopDatabase) StoreMessage(*pb.MsgContainer, uint32) {}
-
-func (NopDatabase) StoreDecryptedMessage(*Message) {}
-
-func (NopDatabase) ListMessages([][]byte) ([]*pb.MsgDigest, error) { return nil, nil }
+	GetMessage(hash []byte) (msg []byte, pow uint64)
+	StoreMessage(hash []byte, c *pb.MsgContainer, f func() (cohort uint32, err error)) error
+	StoreDecryptedMessage(*Message)
+}

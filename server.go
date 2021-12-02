@@ -1,6 +1,7 @@
 package nymo
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -15,7 +16,7 @@ type server struct {
 	user *user
 }
 
-func (s *server) validate(r *http.Request) (*pb.PeerHandshake, []byte) {
+func validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 	if r.Method != http.MethodPost {
 		return nil, nil
 	}
@@ -40,6 +41,10 @@ func (s *server) validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 		return nil, nil
 	}
 
+	if p.Version != nymoVersion {
+		return nil, nil
+	}
+
 	material, err := r.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
 	if err != nil {
 		return nil, nil
@@ -52,32 +57,69 @@ func (s *server) validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	handshake, sessionKey := s.validate(r)
+	certHash := hasher(r.TLS.PeerCertificates[0].Raw)
+	reserver := s.user.reserveClient(truncateHash(certHash[:]))
+	if reserver == nil {
+		w.WriteHeader(http.StatusTeapot)
+		return
+	}
+	defer reserver.rollback()
+
+	handshake, material := validate(r)
 	if handshake == nil {
 		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
+	if !reserver.reserveCohort(handshake.Cohort) {
+		w.WriteHeader(http.StatusTeapot)
+		return
+	}
+	handle := s.user.db.ClientHandle(certHash[:hashTruncate])
 
 	w.WriteHeader(http.StatusOK)
-	p, err := s.user.NewPeerAsServer(r.Context(), r.Body, &writeFlusher{w, w.(http.Flusher)}, handshake, sessionKey)
+	p, err := s.user.newPeerAsServer(
+		r.Context(), handle, r.Body, &writeFlusher{w, w.(http.Flusher)}, material, handshake.Cohort)
 	if err != nil {
-		s.user.cfg.Logger.Println(err)
+		handle.Disconnect(err)
 		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
 
+	reserver.commit(p)
 	<-p.ctx.Done()
 }
 
-func (u *user) RunServer(listenAddr, certFile, keyFile string) error {
-	var serveFunc func(addr, certFile, keyFile string, handler http.Handler) error
+func (u *user) RunServer(listenAddr string) error {
+	srv := &http.Server{
+		Handler: &server{user: u},
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{u.cert},
+			ClientAuth:   tls.RequestClientCert,
+		},
+	}
+
+	hash := hasher([]byte(listenAddr))
+
 	switch {
 	case strings.HasPrefix(listenAddr, "udp://"):
-		serveFunc = http3.ListenAndServeQUIC
+		u.db.AddPeer(listenAddr, &pb.Digest{
+			Hash:   hash[:hashTruncate],
+			Cohort: u.cohort,
+		})
+		u.retry.addSelf(listenAddr)
+
+		srv.Addr = listenAddr[6:]
+		return (&http3.Server{Server: srv}).ListenAndServe()
 	case strings.HasPrefix(listenAddr, "tcp://"):
-		serveFunc = http.ListenAndServeTLS
+		u.db.AddPeer(listenAddr, &pb.Digest{
+			Hash:   hash[:hashTruncate],
+			Cohort: u.cohort,
+		})
+		u.retry.addSelf(listenAddr)
+
+		srv.Addr = listenAddr[6:]
+		return srv.ListenAndServeTLS("", "")
 	default:
 		return fmt.Errorf("%s: unknown address format", listenAddr)
 	}
-	return serveFunc(listenAddr[6:], certFile, keyFile, &server{user: u})
 }

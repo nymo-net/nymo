@@ -5,16 +5,22 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"time"
 )
 
 const (
 	nymoName     = "nymo"
 	nymoVersion  = 1  // v0.1
 	blockSize    = 32 // AES-256
+	digestSize   = sha256.Size
 	cohortNumber = 64
-	bitStrength  = sha256.Size*8 - 20
+	hashTruncate = 8
+	bitStrength  = sha256.Size*8 - 22
 	protoPrefix  = nymoName + "://"
-	epsilon  = 0.1 // 10% messages/peers will be out-of-cohort
+	epsilon      = 0.1 // 10% messages/peers will be out-of-cohort
+
+	msgListMax  = 500
+	peerListMax = 20
 )
 
 var (
@@ -24,4 +30,6 @@ var (
 	encoding = binary.BigEndian
 
 	curveByteLen = (curve.Params().BitSize + 7) / 8 // 256
+
+	emptyTime time.Time
 )

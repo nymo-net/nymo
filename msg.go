@@ -18,7 +18,7 @@ type Message struct {
 	Content  string
 }
 
-func (u *user) DecryptMessage(msg *pb.Message) *Message {
+func (u *user) decryptMessage(msg *pb.Message) *Message {
 	if msg.TargetCohort != u.cohort {
 		return nil
 	}
@@ -64,35 +64,36 @@ func (u *user) DecryptMessage(msg *pb.Message) *Message {
 
 	return &Message{
 		Sender:   newAddress(x, y),
-		SendTime: time.UnixMilli(msg.Generated),
+		SendTime: time.UnixMilli(ret.SendTime),
 		Content:  ret.Message,
 	}
 }
 
-func (u *user) NewMessage(recipient *address, msg string) (*pb.Message, error) {
+func (u *user) NewMessage(recipient *address, msg string) error {
 	ephemeralKey, err := ecdsa.GenerateKey(curve, cReader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	secret, iv := curve.ScalarMult(recipient.x, recipient.y, ephemeralKey.D.Bytes())
 	cp, err := aes.NewCipher(secret.Bytes())
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	rMsg := &pb.RealMessage{
 		Message:  msg,
+		SendTime: time.Now().UnixMilli(),
 		SenderID: elliptic.MarshalCompressed(curve, u.key.X, u.key.Y),
 	}
 	rMsgBuf, err := proto.Marshal(rMsg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	sigR, sigS, err := ecdsa.Sign(cReader, u.key, rMsgBuf)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	enc := pb.EncryptedMessage{
@@ -104,16 +105,24 @@ func (u *user) NewMessage(recipient *address, msg string) (*pb.Message, error) {
 
 	marshal, err := proto.Marshal(&enc)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	marshal = padBlock(marshal)
 	cipher.NewCBCEncrypter(cp, iv.Bytes()[:16]).CryptBlocks(marshal, marshal)
 
-	return &pb.Message{
+	mMsg, err := proto.Marshal(&pb.Message{
 		TargetCohort: recipient.cohort,
-		Generated:    time.Now().UnixMilli(),
 		EphemeralPub: elliptic.MarshalCompressed(curve, ephemeralKey.X, ephemeralKey.Y),
 		EncMessage:   marshal,
-	}, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	msgHash := hasher(mMsg)
+	return u.db.StoreMessage(msgHash[:], &pb.MsgContainer{
+		Msg: mMsg,
+		Pow: calcPoW(msgHash[:]),
+	}, func() (uint32, error) { return recipient.cohort, nil })
 }

@@ -17,8 +17,12 @@ func (r *address) Cohort() uint32 {
 	return r.cohort
 }
 
+func (r *address) Bytes() []byte {
+	return elliptic.MarshalCompressed(curve, r.x, r.y)
+}
+
 func (r *address) String() string {
-	return protoPrefix + base64.RawURLEncoding.EncodeToString(elliptic.MarshalCompressed(curve, r.x, r.y))
+	return protoPrefix + base64.RawURLEncoding.EncodeToString(r.Bytes())
 }
 
 func getCohort(x, y *big.Int) uint32 {
@@ -30,7 +34,7 @@ func getCohort(x, y *big.Int) uint32 {
 	h.SetBytes(hash.Sum(nil))
 	h.Mod(&h, big.NewInt(cohortNumber))
 
-	return uint32(h.Uint64())
+	return uint32(h.Uint64()) + 1
 }
 
 func NewAddress(addr string) *address {

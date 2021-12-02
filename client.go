@@ -3,6 +3,7 @@ package nymo
 import (
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,13 +17,94 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (u *user) DialPeer(addr string) (*peer, error) {
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
+var noMTlsAsked = errors.New("server did not properly ask for mTLS")
+var peerConnected = errors.New("peer connected")
+
+func (u *user) dialNewPeers() {
+	u.peerCleanup()
+
+	enum := u.db.EnumeratePeers()
+	defer enum.Close()
+
+	var outErr error
+	for u.shouldConnectPeers() && enum.Next(outErr) {
+		url := enum.Url()
+		if u.retry.noRetry(url) {
+			outErr = nil
+			continue
+		}
+
+		reserver := u.reserveServer(enum.Cohort())
+		if reserver == nil {
+			outErr = nil
+			continue
+		}
+
+		outErr = u.dialPeer(enum, reserver)
+		if outErr != nil {
+			u.retry.add(url, u.cfg.PeerRetryTime)
+		}
+		if errors.Is(outErr, peerConnected) {
+			outErr = nil
+		}
+	}
+
+	u.peerLock.RLock()
+	defer u.peerLock.RUnlock()
+
+	maxIn := uint(float64(u.cfg.MaxConcurrentConn) * (1 - epsilon))
+	maxOut := u.cfg.MaxConcurrentConn - maxIn
+
+	// ask for more in-cohort peers
+	if u.numIn < maxIn {
+		in := u.numIn
+		for _, p := range u.peers {
+			if p.requestPeer(u.cohort) {
+				in++
+				if in >= maxIn {
+					break
+				}
+			}
+		}
+	}
+
+	// ask for more out-of-cohort peers
+	out := u.total - u.numIn
+	if out < maxOut {
+		for _, p := range u.peers {
+			// FIXME: ask for out-of-cohort, not wildcard
+			if p.requestPeer(0) {
+				out++
+				if maxOut <= out {
+					break
+				}
+			}
+		}
+	}
+}
+
+func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
+	defer reserver.rollback()
+
+	var askedForHandshake bool
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+		GetClientCertificate: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			if len(info.AcceptableCAs) > 0 {
+				return nil, noMTlsAsked
+			}
+			askedForHandshake = true
+			return &u.cert, nil
+		},
+	}
 
 	var r http.RoundTripper
 	var material []byte
+	var peerId [hashTruncate]byte
 	var setHandshake func()
 
+	addr := handle.Url()
 	switch {
 	case strings.HasPrefix(addr, "udp://"):
 		r = &http3.RoundTripper{
@@ -33,6 +115,14 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 					return nil, err
 				}
 				state := session.ConnectionState()
+				if !askedForHandshake {
+					return nil, noMTlsAsked
+				}
+				id := hasher(state.TLS.PeerCertificates[0].Raw)
+				peerId = truncateHash(id[:])
+				if !reserver.reserveId(&peerId) {
+					return nil, peerConnected
+				}
 				material, err = state.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
 				if err != nil {
 					return nil, err
@@ -50,6 +140,14 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 					return nil, err
 				}
 				state := client.ConnectionState()
+				if !askedForHandshake {
+					return nil, noMTlsAsked
+				}
+				id := hasher(state.PeerCertificates[0].Raw)
+				peerId = truncateHash(id[:])
+				if !reserver.reserveId(&peerId) {
+					return nil, peerConnected
+				}
 				material, err = state.ExportKeyingMaterial(nymoName, nil, blockSize)
 				if err != nil {
 					return nil, err
@@ -59,12 +157,12 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 			},
 		}
 	default:
-		return nil, fmt.Errorf("%s: unknown address format", addr)
+		return fmt.Errorf("%s: unknown address format", addr)
 	}
 
 	request, err := http.NewRequest(http.MethodPost, "https"+addr[3:], nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	reader, writer := io.Pipe()
@@ -72,10 +170,8 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 
 	setHandshake = func() {
 		handshake := pb.PeerHandshake{
-			Version:    nymoVersion,
-			Cohort:     u.cohort,
-			Pow:        calcPoW(material),
-			PeerTokens: nil, // TODO
+			Version: nymoVersion,
+			Pow:     calcPoW(material),
 		}
 
 		marshal, err := proto.Marshal(&handshake)
@@ -88,11 +184,16 @@ func (u *user) DialPeer(addr string) (*peer, error) {
 
 	resp, err := r.RoundTrip(request)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.Body.Close()
+		return resp.Body.Close()
 	}
 
-	return u.NewPeerAsClient(request.Context(), resp.Body, writer, material)
+	p, err := u.newPeerAsClient(request.Context(), handle, resp.Body, writer, peerId[:], material)
+	if err != nil {
+		return err
+	}
+	reserver.commit(p)
+	return nil
 }
