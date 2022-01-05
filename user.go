@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/nymo-net/nymo/pb"
 )
 
 type user struct {
@@ -36,6 +38,14 @@ func (u *user) Run() {
 		u.dialNewPeers()
 		time.Sleep(u.cfg.ScanPeerTime)
 	}
+}
+
+func (u *user) AddPeer(url string) {
+	hash := hasher([]byte(url))
+	u.db.AddPeer(url, &pb.Digest{
+		Hash:   hash[:hashTruncate],
+		Cohort: 0, // XXX: when unknown, as wildcard
+	})
 }
 
 func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *user {
