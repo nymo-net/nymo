@@ -12,8 +12,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const uint32Size = int(unsafe.Sizeof(uint32(0)))
-
 func sameCohort(me, you uint32) bool {
 	return you == 0 || me == you
 }
@@ -23,17 +21,20 @@ func sendMessage(conn io.Writer, m proto.Message) error {
 	if err != nil {
 		return err
 	}
+	if len(data) > maxPacketSize {
+		panic("exceed size")
+	}
 
-	buf := make([]byte, len(data)+uint32Size)
-	encoding.PutUint32(buf, uint32(len(data)))
-	copy(buf[uint32Size:], data)
+	buf := make([]byte, uint16Size+len(data))
+	encoding.PutUint16(buf, uint16(len(data)))
+	copy(buf[uint16Size:], data)
 
 	_, err = conn.Write(buf)
 	return err
 }
 
 func recvMessage(conn io.Reader, m proto.Message) error {
-	var size uint32
+	var size uint16
 	err := binary.Read(conn, encoding, &size)
 	if err != nil {
 		return err

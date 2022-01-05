@@ -1,9 +1,11 @@
 package nymo
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -89,14 +91,21 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	<-p.ctx.Done()
 }
 
-func (u *user) RunServer(listenAddr string) error {
+func (u *user) RunServer(ctx context.Context, listenAddr string) error {
 	srv := &http.Server{
 		Handler: &server{user: u},
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{u.cert},
 			ClientAuth:   tls.RequestClientCert,
 		},
+		BaseContext: func(listener net.Listener) context.Context {
+			return ctx
+		},
 	}
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
 
 	hash := hasher([]byte(listenAddr))
 

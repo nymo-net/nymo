@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"math"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -21,6 +23,9 @@ const (
 
 	msgListMax  = 500
 	peerListMax = 20
+
+	uint16Size    = int(unsafe.Sizeof(uint16(0)))
+	maxPacketSize = math.MaxUint16 - uint16Size // 64 KiB
 )
 
 var (

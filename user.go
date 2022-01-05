@@ -1,6 +1,7 @@
 package nymo
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/tls"
 	"math/big"
@@ -33,10 +34,18 @@ func (u *user) Address() *address {
 	}
 }
 
-func (u *user) Run() {
-	for {
-		u.dialNewPeers()
-		time.Sleep(u.cfg.ScanPeerTime)
+func (u *user) Run(ctx context.Context) {
+	t := time.NewTimer(u.cfg.ScanPeerTime)
+	defer t.Stop()
+
+	for ctx.Err() == nil {
+		select {
+		case <-t.C:
+			u.dialNewPeers()
+			t.Reset(u.cfg.ScanPeerTime)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

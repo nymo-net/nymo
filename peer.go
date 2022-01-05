@@ -120,10 +120,16 @@ func (u *user) peerDownlink(p *peer) error {
 
 		switch msg := n.(type) {
 		case *pb.RequestMsg:
+			if len(msg.Hash) != blockSize {
+				return fmt.Errorf("unexpected hash length")
+			}
 			cont := new(pb.MsgContainer)
 			cont.Msg, cont.Pow = u.db.GetMessage(msg.Hash)
 			p.sendProto(cont)
 		case *pb.RequestPeer:
+			if len(msg.UrlHash) != hashTruncate {
+				return fmt.Errorf("unexpected hash length")
+			}
 			if !validatePoW(append(p.key, msg.UrlHash...), msg.Pow) {
 				return fmt.Errorf("invalid pow")
 			}
@@ -140,16 +146,26 @@ func (u *user) peerDownlink(p *peer) error {
 				return fmt.Errorf("unexpected peer list")
 			}
 			for _, l := range msg.Peers {
-				if len(l.Hash) != hashTruncate {
-					return fmt.Errorf("unexpected peer")
+				if len(l.Hash) != hashTruncate || l.Cohort > cohortNumber {
+					return fmt.Errorf("unexpected hash length")
 				}
 			}
 			p.peers = p.handle.AddKnownPeers(msg.Peers)
 		case *pb.MsgList:
+			for _, l := range msg.Messages {
+				if len(l.Hash) != blockSize || l.Cohort > cohortNumber || l.Cohort <= 0 {
+					return fmt.Errorf("unexpected hash length")
+				}
+			}
 			diff, known := p.handle.AddKnownMessages(msg.Messages)
 			p.sendProto(&pb.MsgKnown{Hashes: known})
 			go p.requestMsg(diff, u)
 		case *pb.MsgKnown:
+			for _, l := range msg.Hashes {
+				if len(l) != blockSize {
+					return fmt.Errorf("unexpected hash length")
+				}
+			}
 			if atomic.LoadPointer(&listTimer) != nil {
 				return errors.New("unexpected peer known msg")
 			}
