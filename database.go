@@ -3,9 +3,9 @@ package nymo
 import "github.com/nymo-net/nymo/pb"
 
 type PeerHandle interface {
-	AddKnownMessages([]*pb.Digest) (need []*pb.Digest, ignored [][]byte)
-	AckKnownMessages([][]byte)
+	AddKnownMessages([]*pb.Digest) []*pb.Digest
 	ListMessages(size uint) []*pb.Digest
+	AckMessages()
 	AddKnownPeers([]*pb.Digest) []*pb.Digest
 	ListPeers(size uint) []*pb.Digest
 	Disconnect(error)

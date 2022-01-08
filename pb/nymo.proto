@@ -35,9 +35,7 @@ message MsgList {
   repeated Digest messages = 1;
 }
 
-message MsgKnown {
-  repeated bytes hashes = 1;
-}
+message MsgListAck {}
 
 message RequestMsg {
   bytes hash = 1;

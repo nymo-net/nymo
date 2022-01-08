@@ -29,6 +29,8 @@ type peer struct {
 
 	msgReq  sync.Map
 	peerReq sync.Map
+
+	msgProc uint32
 }
 
 func (p *peer) sendProto(msg proto.Message) {
@@ -67,6 +69,9 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *user) {
 		p.msgReq.Store(*(*[digestSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
 		p.sendProto(&pb.RequestMsg{Hash: digest.Hash})
 	}
+
+	atomic.StoreUint32(&p.msgProc, 0)
+	p.sendProto(&pb.MsgListAck{})
 }
 
 func (p *peer) requestPeer(cohort uint32) bool {
@@ -152,24 +157,21 @@ func (u *user) peerDownlink(p *peer) error {
 			}
 			p.peers = p.handle.AddKnownPeers(msg.Peers)
 		case *pb.MsgList:
+			if atomic.LoadUint32(&p.msgProc) != 0 {
+				return fmt.Errorf("unexpected msg list")
+			}
 			for _, l := range msg.Messages {
 				if len(l.Hash) != blockSize || l.Cohort > cohortNumber || l.Cohort <= 0 {
 					return fmt.Errorf("unexpected hash length")
 				}
 			}
-			diff, known := p.handle.AddKnownMessages(msg.Messages)
-			p.sendProto(&pb.MsgKnown{Hashes: known})
-			go p.requestMsg(diff, u)
-		case *pb.MsgKnown:
-			for _, l := range msg.Hashes {
-				if len(l) != blockSize {
-					return fmt.Errorf("unexpected hash length")
-				}
-			}
+			p.msgProc = 1
+			go p.requestMsg(p.handle.AddKnownMessages(msg.Messages), u)
+		case *pb.MsgListAck:
 			if atomic.LoadPointer(&listTimer) != nil {
-				return errors.New("unexpected peer known msg")
+				return errors.New("unexpected peer msg ack")
 			}
-			p.handle.AckKnownMessages(msg.Hashes)
+			p.handle.AckMessages()
 			atomic.StorePointer(&listTimer, unsafe.Pointer(time.AfterFunc(u.cfg.ListMessageTime, listMsg)))
 		case *pb.MsgContainer:
 			// 1. retrieve request
