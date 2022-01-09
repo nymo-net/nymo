@@ -101,6 +101,7 @@ func (u *user) RunServer(ctx context.Context, listenAddr string) error {
 		BaseContext: func(listener net.Listener) context.Context {
 			return ctx
 		},
+		ErrorLog: u.cfg.Logger,
 	}
 	go func() {
 		<-ctx.Done()
@@ -111,20 +112,20 @@ func (u *user) RunServer(ctx context.Context, listenAddr string) error {
 
 	switch {
 	case strings.HasPrefix(listenAddr, "udp://"):
+		u.retry.addSelf(listenAddr)
 		u.db.AddPeer(listenAddr, &pb.Digest{
 			Hash:   hash[:hashTruncate],
 			Cohort: u.cohort,
 		})
-		u.retry.addSelf(listenAddr)
 
 		srv.Addr = listenAddr[6:]
 		return (&http3.Server{Server: srv}).ListenAndServe()
 	case strings.HasPrefix(listenAddr, "tcp://"):
+		u.retry.addSelf(listenAddr)
 		u.db.AddPeer(listenAddr, &pb.Digest{
 			Hash:   hash[:hashTruncate],
 			Cohort: u.cohort,
 		})
-		u.retry.addSelf(listenAddr)
 
 		srv.Addr = listenAddr[6:]
 		return srv.ListenAndServeTLS("", "")

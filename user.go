@@ -17,7 +17,6 @@ type user struct {
 	cohort uint32
 	key    *ecdsa.PrivateKey
 	cert   tls.Certificate
-	id     [hashTruncate]byte
 
 	peerLock sync.RWMutex
 	peers    map[[hashTruncate]byte]*peer
@@ -35,15 +34,13 @@ func (u *user) Address() *address {
 }
 
 func (u *user) Run(ctx context.Context) {
-	t := time.NewTimer(u.cfg.ScanPeerTime)
-	defer t.Stop()
-
 	for ctx.Err() == nil {
+		u.dialNewPeers()
+		t := time.NewTimer(u.cfg.ScanPeerTime)
 		select {
 		case <-t.C:
-			u.dialNewPeers()
-			t.Reset(u.cfg.ScanPeerTime)
 		case <-ctx.Done():
+			t.Stop()
 			return
 		}
 	}
@@ -74,8 +71,7 @@ func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *u
 		cohort: getCohort(key.X, key.Y),
 		key:    key,
 		cert:   cert,
-		id:     truncateHash(hash[:]),
-		peers:  make(map[[hashTruncate]byte]*peer),
+		peers:  map[[hashTruncate]byte]*peer{truncateHash(hash[:]): nil},
 		retry:  peerRetrier{m: make(map[string]time.Time)},
 	}
 }

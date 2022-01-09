@@ -59,7 +59,7 @@ func (u *user) dialNewPeers() {
 	if u.numIn < maxIn {
 		in := u.numIn
 		for _, p := range u.peers {
-			if p.requestPeer(u.cohort) {
+			if p != nil && p.requestPeer(u.cohort) {
 				in++
 				if in >= maxIn {
 					break
@@ -73,7 +73,7 @@ func (u *user) dialNewPeers() {
 	if out < maxOut {
 		for _, p := range u.peers {
 			// FIXME: ask for out-of-cohort, not wildcard
-			if p.requestPeer(0) {
+			if p != nil && p.requestPeer(0) {
 				out++
 				if maxOut <= out {
 					break
@@ -87,6 +87,10 @@ func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 	defer reserver.rollback()
 
 	var askedForHandshake bool
+	var r http.RoundTripper
+	var material []byte
+	var peerId [hashTruncate]byte
+	var setHandshake func()
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
@@ -99,10 +103,22 @@ func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 		},
 	}
 
-	var r http.RoundTripper
-	var material []byte
-	var peerId [hashTruncate]byte
-	var setHandshake func()
+	validateState := func(state tls.ConnectionState) (err error) {
+		if !askedForHandshake {
+			return noMTlsAsked
+		}
+		id := hasher(state.PeerCertificates[0].Raw)
+		peerId = truncateHash(id[:])
+		if !reserver.reserveId(&peerId) {
+			return peerConnected
+		}
+		material, err = state.ExportKeyingMaterial(nymoName, nil, blockSize)
+		if err != nil {
+			return err
+		}
+		setHandshake()
+		return nil
+	}
 
 	addr := handle.Url()
 	switch {
@@ -114,21 +130,12 @@ func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 				if err != nil {
 					return nil, err
 				}
-				state := session.ConnectionState()
-				if !askedForHandshake {
-					return nil, noMTlsAsked
-				}
-				id := hasher(state.TLS.PeerCertificates[0].Raw)
-				peerId = truncateHash(id[:])
-				if !reserver.reserveId(&peerId) {
-					return nil, peerConnected
-				}
-				material, err = state.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
+				err = validateState(session.ConnectionState().TLS.ConnectionState)
 				if err != nil {
+					_ = session.CloseWithError(0, "")
 					return nil, err
 				}
-				setHandshake()
-				return session, err
+				return session, nil
 			},
 		}
 	case strings.HasPrefix(addr, "tcp://"):
@@ -139,20 +146,11 @@ func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 				if err != nil {
 					return nil, err
 				}
-				state := client.ConnectionState()
-				if !askedForHandshake {
-					return nil, noMTlsAsked
-				}
-				id := hasher(state.PeerCertificates[0].Raw)
-				peerId = truncateHash(id[:])
-				if !reserver.reserveId(&peerId) {
-					return nil, peerConnected
-				}
-				material, err = state.ExportKeyingMaterial(nymoName, nil, blockSize)
+				err = validateState(client.ConnectionState())
 				if err != nil {
+					_ = client.Close()
 					return nil, err
 				}
-				setHandshake()
 				return client, nil
 			},
 		}
