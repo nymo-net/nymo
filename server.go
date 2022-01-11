@@ -15,7 +15,7 @@ import (
 )
 
 type server struct {
-	user *user
+	user *User
 }
 
 func validate(r *http.Request) (*pb.PeerHandshake, []byte) {
@@ -91,7 +91,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	<-p.ctx.Done()
 }
 
-func (u *user) RunServer(ctx context.Context, listenAddr string) error {
+func (u *User) RunServer(ctx context.Context, listenAddr string) error {
 	srv := &http.Server{
 		Handler: &server{user: u},
 		TLSConfig: &tls.Config{

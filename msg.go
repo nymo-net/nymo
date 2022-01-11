@@ -18,7 +18,7 @@ type Message struct {
 	Content  string
 }
 
-func (u *user) decryptMessage(msg *pb.Message) *Message {
+func (u *User) decryptMessage(msg *pb.Message) *Message {
 	if msg.TargetCohort != u.cohort {
 		return nil
 	}
@@ -69,7 +69,7 @@ func (u *user) decryptMessage(msg *pb.Message) *Message {
 	}
 }
 
-func (u *user) NewMessage(recipient *address, msg string) error {
+func (u *User) NewMessage(recipient *address, msg string) error {
 	ephemeralKey, err := ecdsa.GenerateKey(curve, cReader)
 	if err != nil {
 		return err

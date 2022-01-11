@@ -1,7 +1,7 @@
 package nymo
 
 type serverReserver struct {
-	u      *user
+	u      *User
 	cohort uint32
 	id     *[hashTruncate]byte
 }
@@ -55,7 +55,7 @@ func (s *serverReserver) commit(p *peer) {
 }
 
 type clientReserver struct {
-	u      *user
+	u      *User
 	cohort *uint32
 	id     [hashTruncate]byte
 }
@@ -102,14 +102,14 @@ func (c *clientReserver) commit(p *peer) {
 	c.u = nil
 }
 
-func (u *user) shouldConnectPeers() bool {
+func (u *User) shouldConnectPeers() bool {
 	u.peerLock.RLock()
 	defer u.peerLock.RUnlock()
 
 	return u.total < u.cfg.MaxConcurrentConn
 }
 
-func (u *user) peerCleanup() {
+func (u *User) peerCleanup() {
 	u.peerLock.Lock()
 	defer u.peerLock.Unlock()
 
@@ -127,7 +127,7 @@ func (u *user) peerCleanup() {
 	}
 }
 
-func (u *user) reserveCohort(cohort uint32) bool {
+func (u *User) reserveCohort(cohort uint32) bool {
 	u.peerLock.Lock()
 	defer u.peerLock.Unlock()
 
@@ -146,7 +146,7 @@ func (u *user) reserveCohort(cohort uint32) bool {
 	return true
 }
 
-func (u *user) reserveId(id [hashTruncate]byte) bool {
+func (u *User) reserveId(id [hashTruncate]byte) bool {
 	u.peerLock.Lock()
 	defer u.peerLock.Unlock()
 
@@ -158,7 +158,7 @@ func (u *user) reserveId(id [hashTruncate]byte) bool {
 	return true
 }
 
-func (u *user) reserveServer(cohort uint32) *serverReserver {
+func (u *User) reserveServer(cohort uint32) *serverReserver {
 	if !u.reserveCohort(cohort) {
 		return nil
 	}
@@ -168,7 +168,7 @@ func (u *user) reserveServer(cohort uint32) *serverReserver {
 	}
 }
 
-func (u *user) reserveClient(id [hashTruncate]byte) *clientReserver {
+func (u *User) reserveClient(id [hashTruncate]byte) *clientReserver {
 	if !u.reserveId(id) {
 		return nil
 	}

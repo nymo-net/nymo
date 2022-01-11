@@ -11,7 +11,7 @@ import (
 	"github.com/nymo-net/nymo/pb"
 )
 
-type user struct {
+type User struct {
 	cfg    Config
 	db     Database
 	cohort uint32
@@ -25,7 +25,7 @@ type user struct {
 	retry    peerRetrier
 }
 
-func (u *user) Address() *address {
+func (u *User) Address() *address {
 	return &address{
 		cohort: u.cohort,
 		x:      u.key.X,
@@ -33,7 +33,7 @@ func (u *user) Address() *address {
 	}
 }
 
-func (u *user) Run(ctx context.Context) {
+func (u *User) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		u.dialNewPeers()
 		t := time.NewTimer(u.cfg.ScanPeerTime)
@@ -46,7 +46,7 @@ func (u *user) Run(ctx context.Context) {
 	}
 }
 
-func (u *user) AddPeer(url string) {
+func (u *User) AddPeer(url string) {
 	hash := hasher([]byte(url))
 	u.db.AddPeer(url, &pb.Digest{
 		Hash:   hash[:hashTruncate],
@@ -54,7 +54,7 @@ func (u *user) AddPeer(url string) {
 	})
 }
 
-func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *user {
+func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *User {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
@@ -65,7 +65,7 @@ func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *u
 	key.X, key.Y = curve.ScalarBaseMult(userKey)
 
 	hash := hasher(cert.Certificate[0])
-	return &user{
+	return &User{
 		cfg:    *cfg,
 		db:     db,
 		cohort: getCohort(key.X, key.Y),

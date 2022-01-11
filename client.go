@@ -20,7 +20,7 @@ import (
 var noMTlsAsked = errors.New("server did not properly ask for mTLS")
 var peerConnected = errors.New("peer connected")
 
-func (u *user) dialNewPeers() {
+func (u *User) dialNewPeers() {
 	u.peerCleanup()
 
 	enum := u.db.EnumeratePeers()
@@ -83,7 +83,7 @@ func (u *user) dialNewPeers() {
 	}
 }
 
-func (u *user) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
+func (u *User) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 	defer reserver.rollback()
 
 	var askedForHandshake bool

@@ -40,7 +40,7 @@ func (p *peer) sendProto(msg proto.Message) {
 	}
 }
 
-func (p *peer) requestMsg(diff []*pb.Digest, u *user) {
+func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 	in, out := u.db.MessageStat(u.cohort)
 
 	// count in-cohort messages, and
@@ -93,7 +93,7 @@ func (p *peer) requestPeer(cohort uint32) bool {
 	return false
 }
 
-func (u *user) peerDownlink(p *peer) error {
+func (u *User) peerDownlink(p *peer) error {
 	defer p.reader.Close()
 
 	var listTimer unsafe.Pointer
@@ -210,7 +210,7 @@ func (u *user) peerDownlink(p *peer) error {
 	return p.ctx.Err()
 }
 
-func (u *user) peerUplink(p *peer) {
+func (u *User) peerUplink(p *peer) {
 	defer p.reader.Close()
 
 	for {
@@ -234,7 +234,7 @@ func (u *user) peerUplink(p *peer) {
 	}
 }
 
-func (u *user) runPeer(p *peer) *peer {
+func (u *User) runPeer(p *peer) *peer {
 	p.queue = make(chan proto.Message, 10)
 	p.queue <- &pb.PeerList{Peers: p.handle.ListPeers(peerListMax)}
 	p.queue <- &pb.MsgList{Messages: p.handle.ListMessages(msgListMax)}
@@ -245,7 +245,7 @@ func (u *user) runPeer(p *peer) *peer {
 	return p
 }
 
-func (u *user) newPeerAsServer(
+func (u *User) newPeerAsServer(
 	ctx context.Context, handle PeerHandle,
 	r io.ReadCloser, w io.Writer,
 	material []byte, cohort uint32) (*peer, error) {
@@ -265,7 +265,7 @@ func (u *user) newPeerAsServer(
 	}), nil
 }
 
-func (u *user) newPeerAsClient(
+func (u *User) newPeerAsClient(
 	ctx context.Context, handle PeerEnumerate,
 	r io.ReadCloser, w io.Writer,
 	id []byte, sKey []byte) (*peer, error) {
