@@ -8,21 +8,26 @@ import (
 	"strings"
 )
 
-type address struct {
+type Address struct {
 	cohort uint32
 	x, y   *big.Int
 }
 
-func (r *address) Cohort() uint32 {
+func (r *Address) Cohort() uint32 {
 	return r.cohort
 }
 
-func (r *address) Bytes() []byte {
+func (r *Address) Bytes() []byte {
 	return elliptic.MarshalCompressed(curve, r.x, r.y)
 }
 
-func (r *address) String() string {
-	return protoPrefix + base64.RawURLEncoding.EncodeToString(r.Bytes())
+func ConvertAddrToStr(addr []byte) string {
+	// first 6 bits is always 0, so truncate
+	return protoPrefix + base64.RawURLEncoding.EncodeToString(addr)[1:]
+}
+
+func (r *Address) String() string {
+	return ConvertAddrToStr(r.Bytes())
 }
 
 func getCohort(x, y *big.Int) uint32 {
@@ -37,23 +42,27 @@ func getCohort(x, y *big.Int) uint32 {
 	return uint32(h.Uint64()) + 1
 }
 
-func NewAddress(addr string) *address {
+func NewAddress(addr string) *Address {
 	if !strings.HasPrefix(addr, protoPrefix) {
 		return nil
 	}
 
-	buf, err := base64.RawURLEncoding.DecodeString(addr[len(protoPrefix):])
+	// first 6 bits should always be 0 ("A" in base 64)
+	buf, err := base64.RawURLEncoding.DecodeString("A" + addr[len(protoPrefix):])
 	if err != nil {
 		return nil
 	}
+	return NewAddressFromBytes(buf)
+}
 
-	x, y := elliptic.UnmarshalCompressed(curve, buf)
+func NewAddressFromBytes(addr []byte) *Address {
+	x, y := elliptic.UnmarshalCompressed(curve, addr)
 	if x == nil {
 		return nil
 	}
 	return newAddress(x, y)
 }
 
-func newAddress(x, y *big.Int) *address {
-	return &address{getCohort(x, y), x, y}
+func newAddress(x, y *big.Int) *Address {
+	return &Address{getCohort(x, y), x, y}
 }

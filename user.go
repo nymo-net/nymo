@@ -25,8 +25,8 @@ type User struct {
 	retry    peerRetrier
 }
 
-func (u *User) Address() *address {
-	return &address{
+func (u *User) Address() *Address {
+	return &Address{
 		cohort: u.cohort,
 		x:      u.key.X,
 		y:      u.key.Y,
