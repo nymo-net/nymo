@@ -35,7 +35,7 @@ func (u *User) Address() *Address {
 
 func (u *User) Run(ctx context.Context) {
 	for ctx.Err() == nil {
-		u.dialNewPeers()
+		u.dialNewPeers(ctx)
 		t := time.NewTimer(u.cfg.ScanPeerTime)
 		select {
 		case <-t.C:

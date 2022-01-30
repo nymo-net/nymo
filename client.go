@@ -1,6 +1,7 @@
 package nymo
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -20,7 +21,7 @@ import (
 var noMTlsAsked = errors.New("server did not properly ask for mTLS")
 var peerConnected = errors.New("peer connected")
 
-func (u *User) dialNewPeers() {
+func (u *User) dialNewPeers(ctx context.Context) {
 	u.peerCleanup()
 
 	enum := u.db.EnumeratePeers()
@@ -40,7 +41,10 @@ func (u *User) dialNewPeers() {
 			continue
 		}
 
-		outErr = u.dialPeer(enum, reserver)
+		outErr = u.dialPeer(ctx, enum, reserver)
+		if ctx.Err() != nil {
+			return
+		}
 		if outErr != nil {
 			u.retry.add(url, u.cfg.PeerRetryTime)
 		}
@@ -59,6 +63,9 @@ func (u *User) dialNewPeers() {
 	if u.numIn < maxIn {
 		in := u.numIn
 		for _, p := range u.peers {
+			if ctx.Err() != nil {
+				return
+			}
 			if p != nil && p.requestPeer(u.cohort) {
 				in++
 				if in >= maxIn {
@@ -72,6 +79,9 @@ func (u *User) dialNewPeers() {
 	out := u.total - u.numIn
 	if out < maxOut {
 		for _, p := range u.peers {
+			if ctx.Err() != nil {
+				return
+			}
 			// FIXME: ask for out-of-cohort, not wildcard
 			if p != nil && p.requestPeer(0) {
 				out++
@@ -83,7 +93,7 @@ func (u *User) dialNewPeers() {
 	}
 }
 
-func (u *User) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
+func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate, reserver *serverReserver) error {
 	defer reserver.rollback()
 
 	var askedForHandshake bool
@@ -158,7 +168,7 @@ func (u *User) dialPeer(handle PeerEnumerate, reserver *serverReserver) error {
 		return fmt.Errorf("%s: unknown address format", addr)
 	}
 
-	request, err := http.NewRequest(http.MethodPost, "https"+addr[3:], nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https"+addr[3:], nil)
 	if err != nil {
 		return err
 	}
