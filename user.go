@@ -34,6 +34,31 @@ func (u *User) Address() *Address {
 }
 
 func (u *User) Run(ctx context.Context) {
+	if u.cfg.LocalPeerAnnounce {
+		go func() {
+			if e := u.ipv4PeerAnnounce(ctx); e != nil {
+				u.cfg.Logger.Print(e)
+			}
+		}()
+		go func() {
+			if e := u.ipv6PeerAnnounce(ctx); e != nil {
+				u.cfg.Logger.Print(e)
+			}
+		}()
+	}
+	if u.cfg.LocalPeerDiscover {
+		go func() {
+			if e := u.ipv4PeerDiscover(ctx); e != nil {
+				u.cfg.Logger.Print(e)
+			}
+		}()
+		go func() {
+			if e := u.ipv6PeerDiscover(ctx); e != nil {
+				u.cfg.Logger.Print(e)
+			}
+		}()
+	}
+
 	for ctx.Err() == nil {
 		u.dialNewPeers(ctx)
 		t := time.NewTimer(u.cfg.ScanPeerTime)

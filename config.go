@@ -11,6 +11,9 @@ type Config struct {
 	ScanPeerTime      time.Duration
 	PeerRetryTime     time.Duration
 	Logger            *log.Logger
+
+	LocalPeerAnnounce bool
+	LocalPeerDiscover bool
 }
 
 func DefaultConfig() *Config {
@@ -19,6 +22,5 @@ func DefaultConfig() *Config {
 		ListMessageTime:   time.Minute * 5,
 		ScanPeerTime:      time.Second * 30,
 		PeerRetryTime:     time.Minute,
-		Logger:            nil,
 	}
 }
