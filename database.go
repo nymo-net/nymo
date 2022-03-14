@@ -20,14 +20,13 @@ type PeerEnumerate interface {
 }
 
 type Database interface {
-	MessageStat(cohort uint32) (in uint, out uint)
-
 	ClientHandle(id []byte) PeerHandle
 	AddPeer(url string, digest *pb.Digest)
 	EnumeratePeers() PeerEnumerate
 	GetUrlByHash(urlHash []byte) (url string)
 
 	GetMessage(hash []byte) (msg []byte, pow uint64)
+	IgnoreMessage(digest *pb.Digest)
 	StoreMessage(hash []byte, c *pb.MsgContainer, f func() (cohort uint32, err error)) error
 	StoreDecryptedMessage(*Message)
 }

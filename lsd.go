@@ -110,7 +110,7 @@ func parsePacket(p []byte, host string) ([]string, uint32) {
 	if err != nil {
 		return nil, 0
 	}
-	if c < 0 || c >= cohortNumber {
+	if c < 0 || c > cohortNumber {
 		return nil, 0
 	}
 	return addrs, uint32(c)

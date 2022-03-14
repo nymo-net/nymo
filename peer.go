@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,15 +42,10 @@ func (p *peer) sendProto(msg proto.Message) {
 }
 
 func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
-	in, out := u.db.MessageStat(u.cohort)
-
-	// count in-cohort messages, and
-	// remove all same-as-source cohort messages
+	// remove all same-as-source and not same-as-target cohort messages
 	end := len(diff)
 	for i := 0; i < end; i++ {
-		if sameCohort(u.cohort, diff[i].Cohort) {
-			in++
-		} else if sameCohort(p.cohort, diff[i].Cohort) {
+		if !sameCohort(u.cohort, diff[i].Cohort) && sameCohort(p.cohort, diff[i].Cohort) {
 			end--
 			diff[i], diff[end] = diff[end], diff[i]
 			i--
@@ -57,13 +53,11 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 	}
 	diff = diff[:end]
 
-	quota := int(float64(in)/(1-epsilon)*epsilon) - int(out)
 	for _, digest := range diff {
-		if digest.Cohort != u.cohort {
-			if quota <= 0 {
-				continue
-			}
-			quota--
+		if !sameCohort(u.cohort, digest.Cohort) && rand.Float64() >= epsilon {
+			// 1-ε chance of ignoring the out-of-cohort message
+			u.db.IgnoreMessage(digest)
+			continue
 		}
 
 		p.msgReq.Store(*(*[digestSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
@@ -71,13 +65,10 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 	}
 
 	atomic.StoreUint32(&p.msgProc, 0)
-	p.sendProto(&pb.MsgListAck{})
+	p.sendProto(new(pb.MsgListAck))
 }
 
 func (p *peer) requestPeer(cohort uint32) bool {
-	if len(p.peers) > 0 {
-		return false
-	}
 	for i, digest := range p.peers {
 		if !sameCohort(digest.Cohort, cohort) {
 			continue
@@ -156,12 +147,15 @@ func (u *User) peerDownlink(p *peer) error {
 				}
 			}
 			p.peers = p.handle.AddKnownPeers(msg.Peers)
+			if u.cohort == cohortNumber {
+				go p.requestPeer(p.cohort)
+			}
 		case *pb.MsgList:
 			if atomic.LoadUint32(&p.msgProc) != 0 {
 				return fmt.Errorf("unexpected msg list")
 			}
 			for _, l := range msg.Messages {
-				if len(l.Hash) != blockSize || l.Cohort > cohortNumber || l.Cohort <= 0 {
+				if len(l.Hash) != blockSize || l.Cohort >= cohortNumber {
 					return fmt.Errorf("unexpected hash length")
 				}
 			}

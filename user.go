@@ -79,6 +79,22 @@ func (u *User) AddPeer(url string) {
 	})
 }
 
+func OpenSupernode(db Database, cert tls.Certificate, cfg *Config) *User {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	hash := hasher(cert.Certificate[0])
+	return &User{
+		cfg:    *cfg,
+		db:     db,
+		cohort: cohortNumber,
+		cert:   cert,
+		peers:  map[[hashTruncate]byte]*peer{truncateHash(hash[:]): nil},
+		retry:  peerRetrier{m: make(map[string]time.Time)},
+	}
+}
+
 func OpenUser(db Database, userKey []byte, cert tls.Certificate, cfg *Config) *User {
 	if cfg == nil {
 		cfg = DefaultConfig()

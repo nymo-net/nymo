@@ -39,7 +39,7 @@ func getCohort(x, y *big.Int) uint32 {
 	h.SetBytes(hash.Sum(nil))
 	h.Mod(&h, big.NewInt(cohortNumber))
 
-	return uint32(h.Uint64()) + 1
+	return uint32(h.Uint64())
 }
 
 func NewAddress(addr string) *Address {
