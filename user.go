@@ -75,7 +75,7 @@ func (u *User) AddPeer(url string) {
 	hash := hasher([]byte(url))
 	u.db.AddPeer(url, &pb.Digest{
 		Hash:   hash[:hashTruncate],
-		Cohort: 0, // XXX: when unknown, as wildcard
+		Cohort: cohortNumber, // XXX: when unknown, as wildcard
 	})
 }
 
