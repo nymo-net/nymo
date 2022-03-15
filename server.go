@@ -63,6 +63,11 @@ func validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if len(r.TLS.PeerCertificates) <= 0 {
+		http.DefaultServeMux.ServeHTTP(w, r)
+		return
+	}
+
 	certHash := hasher(r.TLS.PeerCertificates[0].Raw)
 	reserver := s.user.reserveClient(truncateHash(certHash[:]))
 	if reserver == nil {
@@ -87,7 +92,6 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Context(), handle, r.Body, &writeFlusher{w, w.(http.Flusher)}, material, handshake.Cohort)
 	if err != nil {
 		handle.Disconnect(err)
-		http.DefaultServeMux.ServeHTTP(w, r)
 		return
 	}
 
