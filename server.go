@@ -99,18 +99,18 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	<-p.ctx.Done()
 }
 
-func (u *User) RunServerUpnp(ctx context.Context, listenAddr string) error {
+func (u *User) RunServerUpnp(ctx context.Context, serverAddr string) error {
 	var protocol string
 	switch {
-	case strings.HasPrefix(listenAddr, "udp://"):
+	case strings.HasPrefix(serverAddr, "udp://"):
 		protocol = "UDP"
-	case strings.HasPrefix(listenAddr, "tcp://"):
+	case strings.HasPrefix(serverAddr, "tcp://"):
 		protocol = "TCP"
 	default:
-		return fmt.Errorf("%s: unsupported address format", listenAddr)
+		return fmt.Errorf("%s: unsupported address format", serverAddr)
 	}
 
-	addr := listenAddr[6:]
+	addr := serverAddr[6:]
 	host, portS, err := net.SplitHostPort(addr)
 	if err != nil {
 		return err
@@ -141,74 +141,40 @@ func (u *User) RunServerUpnp(ctx context.Context, listenAddr string) error {
 	defer client.DeletePortMappingCtx(context.Background(), "", portU, protocol)
 
 	ctx, cancel := context.WithCancel(ctx)
-	srv := &http.Server{
-		Handler: &server{user: u},
-		Addr:    addr,
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{u.cert},
-			ClientAuth:   tls.RequestClientCert,
-		},
-		BaseContext: func(listener net.Listener) context.Context {
-			return ctx
-		},
-		ErrorLog: u.cfg.Logger,
-	}
 
 	go func() {
-		func() {
-			defer cancel()
+		defer cancel()
 
-			ticker := time.NewTicker(time.Second * 3000)
-			defer ticker.Stop()
+		ticker := time.NewTicker(time.Second * 3000)
+		defer ticker.Stop()
 
-			for {
-				select {
-				case <-ctx.Done():
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				err = client.AddPortMappingCtx(ctx, "", portU, protocol, portU, host, true, nymoName, 3600)
+				if err != nil {
+					u.cfg.Logger.Print(err)
 					return
-				case <-ticker.C:
-					err = client.AddPortMappingCtx(ctx, "", portU, protocol, portU, host, true, nymoName, 3600)
-					if err != nil {
-						u.cfg.Logger.Print(err)
-						return
-					}
 				}
 			}
-		}()
-		_ = srv.Shutdown(context.Background())
+		}
 	}()
 
 	switch protocol {
 	case "UDP":
-		listenAddr = "udp://" + net.JoinHostPort(extAddr, portS)
+		serverAddr = "udp://" + net.JoinHostPort(extAddr, portS)
 	case "TCP":
-		listenAddr = "tcp://" + net.JoinHostPort(extAddr, portS)
+		serverAddr = "tcp://" + net.JoinHostPort(extAddr, portS)
 	}
 
-	hash := hasher([]byte(listenAddr))
-
-	switch protocol {
-	case "UDP":
-		u.retry.addSelf(listenAddr)
-		u.db.AddPeer(listenAddr, &pb.Digest{
-			Hash:   hash[:hashTruncate],
-			Cohort: u.cohort,
-		})
-
-		return (&http3.Server{Server: srv}).ListenAndServe()
-	case "TCP":
-		u.retry.addSelf(listenAddr)
-		u.db.AddPeer(listenAddr, &pb.Digest{
-			Hash:   hash[:hashTruncate],
-			Cohort: u.cohort,
-		})
-
-		return srv.ListenAndServeTLS("", "")
-	}
-	panic("not reachable")
+	return u.RunServer(ctx, serverAddr, addr)
 }
 
-func (u *User) RunServer(ctx context.Context, listenAddr string) error {
+func (u *User) RunServer(ctx context.Context, serverAddr, listenAddr string) error {
 	srv := &http.Server{
+		Addr:    listenAddr,
 		Handler: &server{user: u},
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{u.cert},
@@ -224,29 +190,24 @@ func (u *User) RunServer(ctx context.Context, listenAddr string) error {
 		_ = srv.Shutdown(context.Background())
 	}()
 
-	hash := hasher([]byte(listenAddr))
-
+	hash := hasher([]byte(serverAddr))
 	switch {
-	case strings.HasPrefix(listenAddr, "udp://"):
-		u.retry.addSelf(listenAddr)
-		u.db.AddPeer(listenAddr, &pb.Digest{
+	case strings.HasPrefix(serverAddr, "udp://"):
+		u.retry.addSelf(serverAddr)
+		u.db.AddPeer(serverAddr, &pb.Digest{
 			Hash:   hash[:hashTruncate],
 			Cohort: u.cohort,
 		})
-
-		srv.Addr = listenAddr[6:]
 		return (&http3.Server{Server: srv}).ListenAndServe()
-	case strings.HasPrefix(listenAddr, "tcp://"):
-		u.retry.addSelf(listenAddr)
-		u.db.AddPeer(listenAddr, &pb.Digest{
+	case strings.HasPrefix(serverAddr, "tcp://"):
+		u.retry.addSelf(serverAddr)
+		u.db.AddPeer(serverAddr, &pb.Digest{
 			Hash:   hash[:hashTruncate],
 			Cohort: u.cohort,
 		})
-
-		srv.Addr = listenAddr[6:]
 		return srv.ListenAndServeTLS("", "")
 	default:
-		return fmt.Errorf("%s: unknown address format", listenAddr)
+		return fmt.Errorf("%s: unknown address format", serverAddr)
 	}
 }
 
