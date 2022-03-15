@@ -102,6 +102,17 @@ func (c *clientReserver) commit(p *peer) {
 	c.u = nil
 }
 
+func (c *clientReserver) cleanup(u *User, p *peer) {
+	u.peerLock.Lock()
+	defer u.peerLock.Unlock()
+
+	if po, ok := u.peers[c.id]; ok {
+		if po == p {
+			delete(u.peers, c.id)
+		}
+	}
+}
+
 func (u *User) shouldConnectPeers() bool {
 	u.peerLock.RLock()
 	defer u.peerLock.RUnlock()
