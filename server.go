@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -186,9 +187,10 @@ func (u *User) RunServer(ctx context.Context, serverAddr, listenAddr string) err
 		},
 		ErrorLog: u.cfg.Logger,
 	}
+	var cl io.Closer = srv
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
+		_ = cl.Close()
 	}()
 
 	hash := hasher([]byte(serverAddr))
@@ -199,7 +201,9 @@ func (u *User) RunServer(ctx context.Context, serverAddr, listenAddr string) err
 			Hash:   hash[:hashTruncate],
 			Cohort: u.cohort,
 		})
-		return (&http3.Server{Server: srv}).ListenAndServe()
+		s := &http3.Server{Server: srv}
+		cl = s
+		return s.ListenAndServe()
 	case strings.HasPrefix(serverAddr, "tcp://"):
 		u.retry.addSelf(serverAddr)
 		u.db.AddPeer(serverAddr, &pb.Digest{
