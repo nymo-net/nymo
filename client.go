@@ -56,19 +56,16 @@ func (u *User) dialNewPeers(ctx context.Context) {
 	u.peerLock.RLock()
 	defer u.peerLock.RUnlock()
 
-	maxIn := uint(float64(u.cfg.MaxConcurrentConn) * (1 - epsilon))
-	maxOut := u.cfg.MaxConcurrentConn - maxIn
-
 	// ask for more in-cohort peers
-	if u.numIn < maxIn {
+	if u.numIn < u.cfg.MaxInCohortConn {
 		in := u.numIn
 		for _, p := range u.peers {
 			if ctx.Err() != nil {
 				return
 			}
-			if p != nil && p.requestPeer(u.cohort) {
+			if p != nil && p.requestPeer(u.peerSameCohort) {
 				in++
-				if in >= maxIn {
+				if in >= u.cfg.MaxInCohortConn {
 					break
 				}
 			}
@@ -77,15 +74,14 @@ func (u *User) dialNewPeers(ctx context.Context) {
 
 	// ask for more out-of-cohort peers
 	out := u.total - u.numIn
-	if out < maxOut {
+	if out < u.cfg.MaxOutCohortConn {
 		for _, p := range u.peers {
 			if ctx.Err() != nil {
 				return
 			}
-			// FIXME: ask for out-of-cohort, not wildcard
-			if p != nil && p.requestPeer(0) {
+			if p != nil && p.requestPeer(func(c uint32) bool { return !u.peerSameCohort(c) }) {
 				out++
-				if maxOut <= out {
+				if out >= u.cfg.MaxOutCohortConn {
 					break
 				}
 			}

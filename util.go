@@ -12,8 +12,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func sameCohort(o1, o2 uint32) bool {
-	return o1 == o2 || o1 == cohortNumber || o2 == cohortNumber
+func sameCohort(target, pov uint32) bool {
+	return pov == target || target == cohortNumber
+}
+
+func (u *User) peerSameCohort(peer uint32) bool {
+	return sameCohort(peer, u.cohort)
 }
 
 func sendMessage(conn io.Writer, m proto.Message) error {

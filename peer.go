@@ -42,22 +42,19 @@ func (p *peer) sendProto(msg proto.Message) {
 }
 
 func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
-	// remove all same-as-source and not same-as-target cohort messages
-	end := len(diff)
-	for i := 0; i < end; i++ {
-		if !sameCohort(u.cohort, diff[i].Cohort) && sameCohort(p.cohort, diff[i].Cohort) {
-			end--
-			diff[i], diff[end] = diff[end], diff[i]
-			i--
-		}
-	}
-	diff = diff[:end]
-
 	for _, digest := range diff {
-		if !sameCohort(u.cohort, digest.Cohort) && rand.Float64() >= epsilon {
-			// 1-ε chance of ignoring the out-of-cohort message
-			u.db.IgnoreMessage(digest)
-			continue
+		// deal with out-of-cohort message
+		if !sameCohort(u.cohort, digest.Cohort) {
+			// should not receive if msg cohort is same as peer
+			if sameCohort(p.cohort, digest.Cohort) {
+				continue
+			}
+
+			// 1-ε chance of ignoring an out-of-cohort message
+			if rand.Float64() >= epsilon {
+				u.db.IgnoreMessage(digest)
+				continue
+			}
 		}
 
 		p.msgReq.Store(*(*[digestSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
@@ -68,9 +65,9 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 	p.sendProto(new(pb.MsgListAck))
 }
 
-func (p *peer) requestPeer(cohort uint32) bool {
+func (p *peer) requestPeer(pred func(uint32) bool) bool {
 	for i, digest := range p.peers {
-		if !sameCohort(digest.Cohort, cohort) {
+		if !pred(digest.Cohort) {
 			continue
 		}
 		p.peerReq.Store(truncateHash(digest.Hash), digest)
@@ -147,9 +144,6 @@ func (u *User) peerDownlink(p *peer) error {
 				}
 			}
 			p.peers = p.handle.AddKnownPeers(msg.Peers)
-			if u.cohort == cohortNumber {
-				go p.requestPeer(p.cohort)
-			}
 		case *pb.MsgList:
 			if atomic.LoadUint32(&p.msgProc) != 0 {
 				return fmt.Errorf("unexpected msg list")

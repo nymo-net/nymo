@@ -33,7 +33,7 @@ func (s *serverReserver) rollback() {
 	}
 
 	u.total--
-	if sameCohort(u.cohort, s.cohort) {
+	if u.peerSameCohort(s.cohort) {
 		u.numIn--
 	}
 	s.u = nil
@@ -44,7 +44,7 @@ func (s *serverReserver) commit(p *peer) {
 	u.peerLock.Lock()
 	defer u.peerLock.Unlock()
 
-	if !sameCohort(p.cohort, s.cohort) && sameCohort(u.cohort, s.cohort) {
+	if !sameCohort(p.cohort, s.cohort) && u.peerSameCohort(s.cohort) {
 		// bad path, the peer's cohort changed, and
 		// originally we thought it was in-cohort
 		u.numIn--
@@ -83,7 +83,7 @@ func (c *clientReserver) rollback() {
 
 	if c.cohort != nil {
 		u.total--
-		if sameCohort(u.cohort, *c.cohort) {
+		if u.peerSameCohort(*c.cohort) {
 			u.numIn--
 		}
 	}
@@ -102,22 +102,11 @@ func (c *clientReserver) commit(p *peer) {
 	c.u = nil
 }
 
-func (c *clientReserver) cleanup(u *User, p *peer) {
-	u.peerLock.Lock()
-	defer u.peerLock.Unlock()
-
-	if po, ok := u.peers[c.id]; ok {
-		if po == p {
-			delete(u.peers, c.id)
-		}
-	}
-}
-
 func (u *User) shouldConnectPeers() bool {
 	u.peerLock.RLock()
 	defer u.peerLock.RUnlock()
 
-	return u.total < u.cfg.MaxConcurrentConn
+	return u.total < u.cfg.MaxInCohortConn+u.cfg.MaxOutCohortConn
 }
 
 func (u *User) peerCleanup() {
@@ -131,7 +120,7 @@ func (u *User) peerCleanup() {
 		if p.ctx.Err() != nil {
 			delete(u.peers, k)
 			u.total--
-			if sameCohort(u.cohort, p.cohort) {
+			if u.peerSameCohort(p.cohort) {
 				u.numIn--
 			}
 		}
@@ -142,14 +131,13 @@ func (u *User) reserveCohort(cohort uint32) bool {
 	u.peerLock.Lock()
 	defer u.peerLock.Unlock()
 
-	maxIn := uint(float64(u.cfg.MaxConcurrentConn) * (1 - epsilon))
-	if sameCohort(u.cohort, cohort) {
-		if u.numIn >= maxIn {
+	if u.peerSameCohort(cohort) {
+		if u.numIn >= u.cfg.MaxInCohortConn {
 			return false
 		}
 		u.numIn++
 	} else {
-		if u.total-u.numIn >= u.cfg.MaxConcurrentConn-maxIn {
+		if u.total-u.numIn >= u.cfg.MaxOutCohortConn {
 			return false
 		}
 	}

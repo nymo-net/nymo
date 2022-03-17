@@ -6,11 +6,14 @@ import (
 )
 
 type Config struct {
-	MaxConcurrentConn uint
-	ListMessageTime   time.Duration
-	ScanPeerTime      time.Duration
-	PeerRetryTime     time.Duration
-	Logger            *log.Logger
+	MaxInCohortConn  uint
+	MaxOutCohortConn uint
+
+	ListMessageTime time.Duration
+	ScanPeerTime    time.Duration
+	PeerRetryTime   time.Duration
+
+	Logger *log.Logger
 
 	LocalPeerAnnounce bool
 	LocalPeerDiscover bool
@@ -18,9 +21,11 @@ type Config struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		MaxConcurrentConn: 10,
-		ListMessageTime:   time.Minute * 5,
-		ScanPeerTime:      time.Second * 30,
-		PeerRetryTime:     time.Minute,
+		MaxInCohortConn:  5,
+		MaxOutCohortConn: 5,
+
+		ListMessageTime: time.Minute * 5,
+		ScanPeerTime:    time.Second * 30,
+		PeerRetryTime:   time.Minute,
 	}
 }

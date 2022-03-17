@@ -19,7 +19,7 @@ const (
 	hashTruncate = 8
 	bitStrength  = sha256.Size*8 - 22
 	protoPrefix  = nymoName + "://"
-	epsilon      = 0.1 // 10% messages/peers will be out-of-cohort
+	epsilon      = 0.1 // 10% chance out-of-cohort message will be accepted
 
 	msgListMax  = 500
 	peerListMax = 20

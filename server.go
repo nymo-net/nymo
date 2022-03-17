@@ -97,7 +97,6 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reserver.commit(p)
-	defer reserver.cleanup(s.user, p)
 	<-p.ctx.Done()
 }
 
