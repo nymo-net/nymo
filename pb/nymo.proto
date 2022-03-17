@@ -42,7 +42,7 @@ message RequestMsg {
 }
 
 message RealMessage {
-  string message = 1;
+  bytes message = 1;
   bytes senderID = 2; // sender's public key
   int64 sendTime = 3;
 }

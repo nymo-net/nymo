@@ -15,7 +15,7 @@ import (
 type Message struct {
 	Sender   *Address
 	SendTime time.Time
-	Content  string
+	Content  []byte
 }
 
 func (u *User) decryptMessage(msg *pb.Message) *Message {
@@ -69,7 +69,7 @@ func (u *User) decryptMessage(msg *pb.Message) *Message {
 	}
 }
 
-func (u *User) NewMessage(recipient *Address, msg string) error {
+func (u *User) NewMessage(recipient *Address, msg []byte) error {
 	ephemeralKey, err := ecdsa.GenerateKey(curve, cReader)
 	if err != nil {
 		return err
