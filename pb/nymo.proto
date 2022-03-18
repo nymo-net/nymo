@@ -4,7 +4,7 @@ package nymo;
 option go_package = "./pb";
 
 message PeerHandshake {
-  uint32 version = 1;
+  string version = 1;
   uint32 cohort = 2;
   uint64 pow = 3;
 }
@@ -54,8 +54,8 @@ message EncryptedMessage {
 
 message Message {
   uint32 targetCohort = 1;
-  bytes ephemeralPub = 3; // ephemeral public key
-  bytes encMessage = 4; // shared-key encrypted EncryptedMessage
+  bytes ephemeralPub = 2; // ephemeral public key
+  bytes encMessage = 3; // shared-key encrypted EncryptedMessage
 }
 
 message MsgContainer {

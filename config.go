@@ -17,6 +17,7 @@ type Config struct {
 
 	LocalPeerAnnounce bool
 	LocalPeerDiscover bool
+	VerifyServerCert  bool
 }
 
 func DefaultConfig() *Config {

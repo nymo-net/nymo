@@ -12,10 +12,9 @@ import (
 
 const (
 	nymoName     = "nymo"
-	nymoVersion  = 1  // v0.1
-	blockSize    = 32 // AES-256
-	digestSize   = sha256.Size
+	nymoVersion  = "vanilla alpha-1"
 	cohortNumber = 64
+	hashSize     = sha256.Size
 	hashTruncate = 8
 	bitStrength  = sha256.Size*8 - 22
 	protoPrefix  = nymoName + "://"
@@ -38,3 +37,7 @@ var (
 
 	emptyTime time.Time
 )
+
+func Version() string {
+	return nymoVersion
+}

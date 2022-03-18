@@ -57,7 +57,7 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 			}
 		}
 
-		p.msgReq.Store(*(*[digestSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
+		p.msgReq.Store(*(*[hashSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
 		p.sendProto(&pb.RequestMsg{Hash: digest.Hash})
 	}
 
@@ -113,11 +113,11 @@ func (u *User) peerDownlink(p *peer) error {
 
 		switch msg := n.(type) {
 		case *pb.RequestMsg:
-			if len(msg.Hash) != blockSize {
+			if len(msg.Hash) != hashSize {
 				return fmt.Errorf("unexpected hash length")
 			}
 			cont := new(pb.MsgContainer)
-			cont.Msg, cont.Pow = u.db.GetMessage(msg.Hash)
+			cont.Msg, cont.Pow = u.db.GetMessage(copyHash(msg.Hash))
 			p.sendProto(cont)
 		case *pb.RequestPeer:
 			if len(msg.UrlHash) != hashTruncate {
@@ -126,7 +126,7 @@ func (u *User) peerDownlink(p *peer) error {
 			if !validatePoW(append(p.key, msg.UrlHash...), msg.Pow) {
 				return fmt.Errorf("invalid pow")
 			}
-			p.sendProto(&pb.ResponsePeer{Address: u.db.GetUrlByHash(msg.UrlHash)})
+			p.sendProto(&pb.ResponsePeer{Address: u.db.GetUrlByHash(truncateHash(msg.UrlHash))})
 		case *pb.ResponsePeer:
 			hash := hasher([]byte(msg.Address))
 			digest, loaded := p.peerReq.LoadAndDelete(truncateHash(hash[:]))
@@ -149,7 +149,7 @@ func (u *User) peerDownlink(p *peer) error {
 				return fmt.Errorf("unexpected msg list")
 			}
 			for _, l := range msg.Messages {
-				if len(l.Hash) != blockSize || l.Cohort >= cohortNumber {
+				if len(l.Hash) != hashSize || l.Cohort >= cohortNumber {
 					return fmt.Errorf("unexpected hash length")
 				}
 			}
@@ -168,7 +168,7 @@ func (u *User) peerDownlink(p *peer) error {
 			if !loaded {
 				return fmt.Errorf("unexpected msg response")
 			}
-			err := u.db.StoreMessage(msgHash[:], msg, func() (uint32, error) {
+			err := u.db.StoreMessage(msgHash, msg, func() (uint32, error) {
 				// 2. validate pow
 				if !validatePoW(msgHash[:], msg.Pow) {
 					return 0, fmt.Errorf("invalid pow")
@@ -256,7 +256,7 @@ func (u *User) newPeerAsServer(
 func (u *User) newPeerAsClient(
 	ctx context.Context, handle PeerEnumerate,
 	r io.ReadCloser, w io.Writer,
-	id []byte, sKey []byte) (*peer, error) {
+	id [hashTruncate]byte, sKey []byte) (*peer, error) {
 	var ok pb.HandshakeOK
 	if err := recvMessage(r, &ok); err != nil {
 		return nil, err

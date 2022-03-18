@@ -35,7 +35,7 @@ func (u *User) decryptMessage(msg *pb.Message) *Message {
 	}
 
 	encMsg := msg.EncMessage
-	cipher.NewCBCDecrypter(cp, iv.Bytes()[:16]).CryptBlocks(encMsg, encMsg)
+	cipher.NewCBCDecrypter(cp, iv.Bytes()[8:][:aes.BlockSize]).CryptBlocks(encMsg, encMsg)
 	block := trimBlock(encMsg)
 	if block == nil {
 		return nil
@@ -54,8 +54,9 @@ func (u *User) decryptMessage(msg *pb.Message) *Message {
 	}
 
 	x, y := elliptic.UnmarshalCompressed(curve, ret.SenderID)
+	h := hasher(enc.Msg)
 	if x == nil || !ecdsa.Verify(
-		&ecdsa.PublicKey{Curve: curve, X: x, Y: y}, enc.Msg,
+		&ecdsa.PublicKey{Curve: curve, X: x, Y: y}, h[:],
 		new(big.Int).SetBytes(enc.Signature[:curveByteLen]),
 		new(big.Int).SetBytes(enc.Signature[curveByteLen:]),
 	) {
@@ -91,7 +92,8 @@ func (u *User) NewMessage(recipient *Address, msg []byte) error {
 		return err
 	}
 
-	sigR, sigS, err := ecdsa.Sign(cReader, u.key, rMsgBuf)
+	h := hasher(rMsgBuf)
+	sigR, sigS, err := ecdsa.Sign(cReader, u.key, h[:])
 	if err != nil {
 		return err
 	}
@@ -109,7 +111,7 @@ func (u *User) NewMessage(recipient *Address, msg []byte) error {
 	}
 
 	marshal = padBlock(marshal)
-	cipher.NewCBCEncrypter(cp, iv.Bytes()[:16]).CryptBlocks(marshal, marshal)
+	cipher.NewCBCEncrypter(cp, iv.Bytes()[8:][:aes.BlockSize]).CryptBlocks(marshal, marshal)
 
 	mMsg, err := proto.Marshal(&pb.Message{
 		TargetCohort: recipient.cohort,
@@ -121,7 +123,7 @@ func (u *User) NewMessage(recipient *Address, msg []byte) error {
 	}
 
 	msgHash := hasher(mMsg)
-	return u.db.StoreMessage(msgHash[:], &pb.MsgContainer{
+	return u.db.StoreMessage(msgHash, &pb.MsgContainer{
 		Msg: mMsg,
 		Pow: calcPoW(msgHash[:]),
 	}, func() (uint32, error) { return recipient.cohort, nil })

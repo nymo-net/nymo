@@ -35,13 +35,7 @@ func (u *User) dialNewPeers(ctx context.Context) {
 			continue
 		}
 
-		reserver := u.reserveServer(enum.Cohort())
-		if reserver == nil {
-			outErr = nil
-			continue
-		}
-
-		outErr = u.dialPeer(ctx, enum, reserver)
+		outErr = u.dialPeer(ctx, enum)
 		if ctx.Err() != nil {
 			return
 		}
@@ -89,7 +83,11 @@ func (u *User) dialNewPeers(ctx context.Context) {
 	}
 }
 
-func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate, reserver *serverReserver) error {
+func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate) error {
+	reserver := u.reserveServer(handle.Cohort())
+	if reserver == nil {
+		return nil
+	}
 	defer reserver.rollback()
 
 	var askedForHandshake bool
@@ -99,7 +97,7 @@ func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate, reserver *ser
 	var setHandshake func()
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: !u.cfg.VerifyServerCert,
 		GetClientCertificate: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 			if len(info.AcceptableCAs) > 0 {
 				return nil, noMTlsAsked
@@ -118,7 +116,7 @@ func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate, reserver *ser
 		if !reserver.reserveId(&peerId) {
 			return peerConnected
 		}
-		material, err = state.ExportKeyingMaterial(nymoName, nil, blockSize)
+		material, err = state.ExportKeyingMaterial(nymoName, nil, hashSize)
 		if err != nil {
 			return err
 		}
@@ -194,7 +192,7 @@ func (u *User) dialPeer(ctx context.Context, handle PeerEnumerate, reserver *ser
 		return resp.Body.Close()
 	}
 
-	p, err := u.newPeerAsClient(request.Context(), handle, resp.Body, writer, peerId[:], material)
+	p, err := u.newPeerAsClient(request.Context(), handle, resp.Body, writer, peerId, material)
 	if err != nil {
 		return err
 	}

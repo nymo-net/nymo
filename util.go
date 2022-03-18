@@ -2,6 +2,7 @@ package nymo
 
 import (
 	"bytes"
+	"crypto/aes"
 	"encoding/binary"
 	"io"
 	"net/http"
@@ -64,14 +65,14 @@ func (w *writeFlusher) Write(p []byte) (n int, err error) {
 }
 
 func padBlock(input []byte) []byte {
-	pad := (len(input)/blockSize+1)*blockSize - len(input)
+	pad := (len(input)/aes.BlockSize+1)*aes.BlockSize - len(input)
 	return append(input, bytes.Repeat([]byte{byte(pad)}, pad)...)
 }
 
 func trimBlock(input []byte) []byte {
 	c := input[len(input)-1]
 	b := int(c)
-	if b <= 0 || b > blockSize {
+	if b <= 0 || b > aes.BlockSize {
 		return nil
 	}
 	for i := len(input) - b; i < len(input)-1; i++ {
@@ -83,7 +84,17 @@ func trimBlock(input []byte) []byte {
 }
 
 func truncateHash(hash []byte) [hashTruncate]byte {
+	if len(hash) < hashTruncate {
+		panic("out of bounds")
+	}
 	return *(*[hashTruncate]byte)(unsafe.Pointer(&hash[0]))
+}
+
+func copyHash(hash []byte) [hashSize]byte {
+	if len(hash) < hashSize {
+		panic("out of bounds")
+	}
+	return *(*[hashSize]byte)(unsafe.Pointer(&hash[0]))
 }
 
 type peerRetrier struct {

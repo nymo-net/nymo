@@ -52,7 +52,7 @@ func validate(r *http.Request) (*pb.PeerHandshake, []byte) {
 		return nil, nil
 	}
 
-	material, err := r.TLS.ExportKeyingMaterial(nymoName, nil, blockSize)
+	material, err := r.TLS.ExportKeyingMaterial(nymoName, nil, hashSize)
 	if err != nil {
 		return nil, nil
 	}
@@ -86,7 +86,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 		return
 	}
-	handle := s.user.db.ClientHandle(certHash[:hashTruncate])
+	handle := s.user.db.ClientHandle(truncateHash(certHash[:]))
 
 	w.WriteHeader(http.StatusOK)
 	p, err := s.user.newPeerAsServer(
