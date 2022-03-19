@@ -29,6 +29,7 @@ type peer struct {
 	queue chan proto.Message
 
 	msgReq  sync.Map
+	msgQ    chan struct{}
 	peerReq sync.Map
 
 	msgProc uint32
@@ -42,6 +43,7 @@ func (p *peer) sendProto(msg proto.Message) {
 }
 
 func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
+	count := 0
 	for _, digest := range diff {
 		// deal with out-of-cohort message
 		if !sameCohort(u.cohort, digest.Cohort) {
@@ -57,10 +59,17 @@ func (p *peer) requestMsg(diff []*pb.Digest, u *User) {
 			}
 		}
 
-		p.msgReq.Store(*(*[hashSize]byte)(unsafe.Pointer(&digest.Hash[0])), nil)
+		p.msgReq.Store(*(*[hashSize]byte)(unsafe.Pointer(&digest.Hash[0])), digest.Cohort)
 		p.sendProto(&pb.RequestMsg{Hash: digest.Hash})
+		count++
 	}
 
+	for count > 0 {
+		if _, ok := <-p.msgQ; !ok {
+			break
+		}
+		count--
+	}
 	atomic.StoreUint32(&p.msgProc, 0)
 	p.sendProto(new(pb.MsgListAck))
 }
@@ -82,6 +91,7 @@ func (p *peer) requestPeer(pred func(uint32) bool) bool {
 }
 
 func (u *User) peerDownlink(p *peer) error {
+	defer close(p.msgQ)
 	defer p.reader.Close()
 
 	var listTimer unsafe.Pointer
@@ -162,22 +172,29 @@ func (u *User) peerDownlink(p *peer) error {
 			p.handle.AckMessages()
 			atomic.StorePointer(&listTimer, unsafe.Pointer(time.AfterFunc(u.cfg.ListMessageTime, listMsg)))
 		case *pb.MsgContainer:
+			if msg.Msg == nil {
+				return fmt.Errorf("no msg")
+			}
 			// 1. retrieve request
 			msgHash := hasher(msg.Msg)
-			_, loaded := p.msgReq.LoadAndDelete(msgHash)
+			expCohort, loaded := p.msgReq.LoadAndDelete(msgHash)
 			if !loaded {
 				return fmt.Errorf("unexpected msg response")
 			}
+			p.msgQ <- struct{}{}
 			err := u.db.StoreMessage(msgHash, msg, func() (uint32, error) {
 				// 2. validate pow
 				if !validatePoW(msgHash[:], msg.Pow) {
-					return 0, fmt.Errorf("invalid pow")
+					return 0, errors.New("invalid pow")
 				}
 				// 3. try decode
 				var m pb.Message
 				err := proto.Unmarshal(msg.Msg, &m)
 				if err != nil {
 					return 0, err
+				}
+				if m.TargetCohort != expCohort.(uint32) {
+					return 0, errors.New("unexpected pow")
 				}
 				// 4. try decrypt and store
 				if m.TargetCohort == u.cohort {
@@ -250,6 +267,7 @@ func (u *User) newPeerAsServer(
 		writer: w,
 		cohort: cohort,
 		key:    material,
+		msgQ:   make(chan struct{}, 100),
 	}), nil
 }
 
@@ -269,5 +287,6 @@ func (u *User) newPeerAsClient(
 		writer: w,
 		cohort: ok.Cohort,
 		key:    sKey,
+		msgQ:   make(chan struct{}, 100),
 	}), nil
 }
