@@ -100,6 +100,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	<-p.ctx.Done()
 }
 
+// RunServerUpnp discover Upnp server for NAT traversal. If successful, a new Nymo peer server will
+// listen on serverAddr and the server address mapped external IP address and port.
 func (u *User) RunServerUpnp(ctx context.Context, serverAddr string) error {
 	var protocol string
 	switch {
@@ -173,6 +175,7 @@ func (u *User) RunServerUpnp(ctx context.Context, serverAddr string) error {
 	return u.RunServer(ctx, serverAddr, addr)
 }
 
+// RunServer runs a Nymo peer server with the given serverAddr and listenAddr, controlled by the ctx.
 func (u *User) RunServer(ctx context.Context, serverAddr, listenAddr string) error {
 	srv := &http.Server{
 		Addr:    listenAddr,
@@ -215,6 +218,7 @@ func (u *User) RunServer(ctx context.Context, serverAddr, listenAddr string) err
 	}
 }
 
+// ListServers lists all currently listening servers.
 func (u *User) ListServers() (ret []string) {
 	u.retry.l.Lock()
 	defer u.retry.l.Unlock()

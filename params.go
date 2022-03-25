@@ -38,6 +38,7 @@ var (
 	emptyTime time.Time
 )
 
+// Version returns the current version of Nymo core.
 func Version() string {
 	return nymoVersion
 }

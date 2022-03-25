@@ -24,28 +24,30 @@ var peerConnected = errors.New("peer connected")
 func (u *User) dialNewPeers(ctx context.Context) {
 	u.peerCleanup()
 
-	enum := u.db.EnumeratePeers()
-	defer enum.Close()
+	func() {
+		enum := u.db.EnumeratePeers()
+		defer enum.Close()
 
-	var outErr error
-	for u.shouldConnectPeers() && enum.Next(outErr) {
-		url := enum.Url()
-		if u.retry.noRetry(url) {
-			outErr = nil
-			continue
-		}
+		var outErr error
+		for u.shouldConnectPeers() && enum.Next(outErr) {
+			url := enum.Url()
+			if u.retry.noRetry(url) {
+				outErr = nil
+				continue
+			}
 
-		outErr = u.dialPeer(ctx, enum)
-		if ctx.Err() != nil {
-			return
+			outErr = u.dialPeer(ctx, enum)
+			if ctx.Err() != nil {
+				return
+			}
+			if outErr != nil {
+				u.retry.add(url, u.cfg.PeerRetryTime)
+			}
+			if errors.Is(outErr, peerConnected) {
+				outErr = nil
+			}
 		}
-		if outErr != nil {
-			u.retry.add(url, u.cfg.PeerRetryTime)
-		}
-		if errors.Is(outErr, peerConnected) {
-			outErr = nil
-		}
-	}
+	}()
 
 	u.peerLock.RLock()
 	defer u.peerLock.RUnlock()

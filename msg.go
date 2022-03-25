@@ -12,10 +12,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Message contains a decrypted message (sent to the user).
 type Message struct {
-	Sender   *Address
+	// Sender is the sender of the message.
+	Sender *Address
+	// SendTime is the sender-specified time.
 	SendTime time.Time
-	Content  []byte
+	// Content contains the protocol-specified message data.
+	// It is a UTF-8 encoded string in vanilla implementation.
+	Content []byte
 }
 
 func (u *User) decryptMessage(msg *pb.Message) *Message {
@@ -70,6 +75,8 @@ func (u *User) decryptMessage(msg *pb.Message) *Message {
 	}
 }
 
+// NewMessage send a new message with content msg to the recipient.
+// Database.StoreMessage might be called synchronously.
 func (u *User) NewMessage(recipient *Address, msg []byte) error {
 	ephemeralKey, err := ecdsa.GenerateKey(curve, cReader)
 	if err != nil {

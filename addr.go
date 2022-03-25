@@ -8,24 +8,30 @@ import (
 	"strings"
 )
 
+// Address represents the address of a Nymo user. This struct should not be initialized directly.
 type Address struct {
 	cohort uint32
 	x, y   *big.Int
 }
 
+// Cohort returns the cohort number of the address.
 func (r *Address) Cohort() uint32 {
 	return r.cohort
 }
 
+// Bytes returns the encoded address.
 func (r *Address) Bytes() []byte {
 	return elliptic.MarshalCompressed(curve, r.x, r.y)
 }
 
+// ConvertAddrToStr returns the string version of an encoded Nymo user address.
 func ConvertAddrToStr(addr []byte) string {
 	// first 6 bits is always 0, so truncate
 	return protoPrefix + base64.RawURLEncoding.EncodeToString(addr)[1:]
 }
 
+// String returns the string version of the address.
+// It is equivalent to ConvertAddrToStr(address.Bytes())
 func (r *Address) String() string {
 	return ConvertAddrToStr(r.Bytes())
 }
@@ -42,6 +48,7 @@ func getCohort(x, y *big.Int) uint32 {
 	return uint32(h.Uint64())
 }
 
+// NewAddress converts the string version of an address into the internal representation.
 func NewAddress(addr string) *Address {
 	if !strings.HasPrefix(addr, protoPrefix) {
 		return nil
@@ -55,6 +62,7 @@ func NewAddress(addr string) *Address {
 	return NewAddressFromBytes(buf)
 }
 
+// NewAddressFromBytes converts the encoded address into the internal representation.
 func NewAddressFromBytes(addr []byte) *Address {
 	x, y := elliptic.UnmarshalCompressed(curve, addr)
 	if x == nil {
